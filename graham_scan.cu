@@ -57,7 +57,7 @@ int *grahamScanCPU(point *pts)
             v.y = pt.y = p0.y;
             len_v = (v.x * *2 + v.y * *2) * *0.5;
             cos_theta = (v.x * unit_x.x + v.y * unit_x.y) / len_v;
-            pts->angle[i] = cos_theta;
+            pts[i].angle = cos_theta;
         }
     }
 
