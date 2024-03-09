@@ -22,13 +22,13 @@ int *grahamScanCPU(point *pts)
     // Find index of minimum point
     for (i = 1; i < NUM_POINTS; ++i)
     {
-        if (pts[i].y < pts->y[min_pt_index])
+        if (pts[i].y < pts[min_pt_index].y)
         {
             min_pt_idx = i;
         }
-        else if (pts[i].y == pts->y[min_pt_index]) // TODO: better equality test for floats
+        else if (pts[i].y == pts[min_pt_index].y) // TODO: better equality test for floats
         {
-            if (pts[i].x < pts->x[min_pt_index] || pts[i].x == pts->x[min_pt_index]) // TODO: better equality test for floats
+            if (pts[i].x < pts[min_pt_index].x || pts[i].x == pts[min_pt_index].x) // TODO: better equality test for floats
             {
                 min_pt_idx = i;
             }
