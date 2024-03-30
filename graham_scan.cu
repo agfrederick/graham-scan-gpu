@@ -105,7 +105,14 @@ int *grahamScanCPU(point *pts)
     // TODO: find and return ordered indices of hull points contained in stack in sorted_points
 }
 
-// TODO: function for generating random point cloud
+// TODO: function for generating random point cloud 
+// Generates an array of type point
+void generatePointCloud(point *pts, int size, float bottomLX, float bottomLY, float squareSize){
+    for (int i = 0; i<size; ++i){
+        pts[i].x = bottomLX + static_cast<float>(rand())/RAND_MAX * squareSize;
+        pts[i].y = bottomLY + static_cast<float>(rand())/RAND_MAX * squareSize;
+    }
+}
 
 // TODO: function for rendering point cloud with convex hull
 
