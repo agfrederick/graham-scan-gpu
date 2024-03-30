@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stack>
 #include <algorithm>
+#include <cstdlib> // For rand()
 
 #include "kernels.cuh"
 
