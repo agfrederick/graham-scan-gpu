@@ -119,10 +119,12 @@ std::stack<point> grahamScanCPU(point *pts)
 
 // function for generating random point cloud
 // Generates an array of type point
-void generatePointCloud(point *pts, int size, float bottomLX, float bottomLY, float squareSize){
-    for (int i = 0; i<size; ++i){
-        pts[i].x = bottomLX + static_cast<float>(rand())/RAND_MAX * squareSize;
-        pts[i].y = bottomLY + static_cast<float>(rand())/RAND_MAX * squareSize;
+void generatePointCloud(point *pts, int size, float bottomLX, float bottomLY, float squareSize)
+{
+    for (int i = 0; i < size; ++i)
+    {
+        pts[i].x = bottomLX + static_cast<float>(rand()) / RAND_MAX * squareSize;
+        pts[i].y = bottomLY + static_cast<float>(rand()) / RAND_MAX * squareSize;
     }
 }
 
@@ -146,6 +148,6 @@ int main(void)
     {
         pt = s.top();
         s.pop();
-        printf("stack point (%f, %f)", pt.x, pt.y);
+        printf("stack point (%f, %f)\n", pt.x, pt.y);
     }
 }
