@@ -119,4 +119,12 @@ void generatePointCloud(point *pts, int size, float bottomLX, float bottomLY, fl
 int main(void)
 {
     // TODO
+    point pointsArray[NUM_POINTS];
+
+    int size = NUM_POINTS; // Size of the point cloud
+    float bottomLeftX = 0.0f; // Bottom left corner of the square
+    float bottomLeftY = 0.0f;
+    float squareSize = 10.0f; // Size of the square containing the point cloud
+
+    generateRandomPoints(pointsArray, size, bottomLeftX, bottomLeftY, squareSize);
 }
