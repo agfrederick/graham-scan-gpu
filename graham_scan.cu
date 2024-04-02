@@ -93,6 +93,10 @@ std::stack<point> grahamScanCPU(point *pts)
             pts[i].angle = cos_theta;
         }
     }
+    // for (int i = 0; i < NUM_POINTS; ++i)
+    // {
+    //     printf("pt angle CPU: (%f, %f) %f\n", pts[i].x, pts[i].y, pts[i].angle);
+    // }
 
     for (i = 0; i < NUM_POINTS; ++i)
     {
@@ -326,6 +330,11 @@ void calculateCosAnglesGPU(points *h_points, points *d_points, point p0)
     // output result
     printf("\tExecution time for angle finding was %f ms\n", time);
 
+    // for (int i = 0; i < NUM_POINTS; ++i)
+    // {
+    //     printf("pt angle GPU: (%f, %f) %f\n", h_points->x[i], h_points->y[i], h_points->angle[i]);
+    // }
+
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
 }
@@ -358,8 +367,15 @@ int main(int argc, char **argv)
     // glutMainLoop();
     // TODO
     point pointsArray[NUM_POINTS];
+    point pointsArray2[NUM_POINTS];
 
     generatePointCloud(pointsArray, SIZE, BOTTOMLEFTX, BOTTOMLEFTY, SQUARESIZE);
+
+    // make copy of array to use in GPU function, original will be modified by CPU function
+    for (int i = 0; i < NUM_POINTS; ++i)
+    {
+        pointsArray2[i] = pointsArray[i];
+    }
 
     std::stack<point> s_cpu = grahamScanCPU(pointsArray);
     point pt;
@@ -370,7 +386,7 @@ int main(int argc, char **argv)
         printf("CPU stack point (%f, %f)\n", pt.x, pt.y);
     }
 
-    std::stack<point> s_gpu = grahamScanGPU(pointsArray);
+    std::stack<point> s_gpu = grahamScanGPU(pointsArray2);
     while (!s_gpu.empty())
     {
         pt = s_gpu.top();
