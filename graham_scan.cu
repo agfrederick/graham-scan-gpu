@@ -69,6 +69,8 @@ std::stack<point> grahamScanCPU(point *pts)
     p0.x = pts[min_pt_index].x;
     p0.y = pts[min_pt_index].y;
 
+    printf("CPU lowest point was found at (%f, %f), index %d\n", p0.x, p0.y, min_pt_index);
+
     // calculate the angle associated with each points vector from p0
     point unit_x;
     unit_x.x = 1;
@@ -147,6 +149,7 @@ void generatePointCloud(point *pts, int size, float bottomLX, float bottomLY, fl
     {
         pts[i].x = bottomLX + static_cast<float>(rand()) / RAND_MAX * squareSize;
         pts[i].y = bottomLY + static_cast<float>(rand()) / RAND_MAX * squareSize;
+        printf("Rand pt: (%f, %f)\n", pts[i].x, pts[i].y);
     }
 }
 
@@ -213,12 +216,7 @@ std::stack<point> grahamScanGPU(point *pts)
     cudaMalloc((void **)&d_points, sizeof(points));
     cudaMalloc((void **)&d_points_result, sizeof(points));
 
-    // Generate points
-    point pointsArray[NUM_POINTS];
-
-    generatePointCloud(pointsArray, SIZE, BOTTOMLEFTX, BOTTOMLEFTY, SQUARESIZE);
-
-    pointArrayToPoints(pointsArray, h_points);
+    pointArrayToPoints(pts, h_points);
 
     // Find minimum point
     point p0 = minPointGPU(h_points, h_points_result, d_points, d_points_result);
