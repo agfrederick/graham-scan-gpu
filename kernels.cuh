@@ -5,6 +5,7 @@
 #define THREADS_PER_BLOCK 4
 
 #include <stdio.h>
+#include <math.h>
 
 struct point
 {
@@ -79,24 +80,24 @@ __global__ void findCosAngles_kernel(points *d_points, point p0)
     // Compute vector
     // Find cosine of angle with x-axis, store in angle entry of struct
     // calculate the angle associated with each points vector from p0
-    // point unit_x;
-    // unit_x.x = 1;
-    // unit_x.y = 0;
+    point unit_x;
+    unit_x.x = 1;
+    unit_x.y = 0;
 
-    // point pt;
-    // point v;
-    // float len_v;
-    // float cos_theta;
-    // if (pt.x != p0.x && pt.y != p0.y) // TODO: float equality
-    // {
-    //     pt.x = d_points->x[idx];
-    //     pt.y = d_points->y[idx];
-    //     v.x = pt.x - p0.x;
-    //     v.y = pt.y = p0.y;
-    //     len_v = pow((pow(v.x, 2) + pow(v.y, 2)), 0.5);
-    //     cos_theta = (v.x * unit_x.x + v.y * unit_x.y) / len_v;
-    //     d_points->angle[idx] = cos_theta;
-    // }
+    point pt;
+    point v;
+    float len_v;
+    float cos_theta;
+    if (pt.x != p0.x && pt.y != p0.y) // TODO: float equality
+    {
+        pt.x = d_points->x[idx];
+        pt.y = d_points->y[idx];
+        v.x = pt.x - p0.x;
+        v.y = pt.y = p0.y;
+        len_v = sqrt((v.x * v.x + v.y * v.y));
+        cos_theta = (v.x * unit_x.x + v.y * unit_x.y) / len_v;
+        d_points->angle[idx] = cos_theta;
+    }
 }
 
 __global__ void sorting_kernel(points *d_pts)
