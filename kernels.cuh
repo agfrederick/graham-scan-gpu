@@ -2,7 +2,7 @@
 #define KERNEL_H
 
 #define NUM_POINTS 32 // TODO: try different numbers of points
-#define THREADS_PER_BLOCK 256
+#define THREADS_PER_BLOCK 4
 
 #include <stdio.h>
 
@@ -45,10 +45,11 @@ __global__ void lowestPoint_kernel(points *d_points, points *d_reduced_points)
 
     // reduce
     int i = 2 * shared_idx;
-    for (int stride = 1; stride < NUM_POINTS; stride *= 2)
+    for (int stride = 1; stride < THREADS_PER_BLOCK; stride *= 2)
     {
         if (shared_idx % stride == 0)
         {
+            // printf("Comparing idx %d, %d, vals %f, %f\n", i, i + stride, shared_points[i].y, shared_points[i + stride].y);
             if (shared_points[i].y > shared_points[i + stride].y)
             {
                 shared_points[i] = shared_points[i + stride];
