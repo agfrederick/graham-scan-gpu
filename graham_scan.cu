@@ -80,7 +80,7 @@ std::stack<point> grahamScanCPU(point *pts)
     point v;
     float len_v;
     float cos_theta;
-    for (i = 1; i < NUM_POINTS; ++i)
+    for (i = 0; i < NUM_POINTS; ++i)
     {
         if (i != min_pt_index)
         {
