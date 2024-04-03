@@ -88,12 +88,12 @@ __global__ void findCosAngles_kernel(points *d_points, point p0)
     point v;
     float len_v;
     float cos_theta;
+    pt.x = d_points->x[idx];
+    pt.y = d_points->y[idx];
     if (pt.x != p0.x && pt.y != p0.y) // TODO: float equality
     {
-        pt.x = d_points->x[idx];
-        pt.y = d_points->y[idx];
         v.x = pt.x - p0.x;
-        v.y = pt.y = p0.y;
+        v.y = pt.y - p0.y;
         len_v = sqrt((v.x * v.x + v.y * v.y));
         cos_theta = (v.x * unit_x.x + v.y * unit_x.y) / len_v;
         d_points->angle[idx] = cos_theta;
