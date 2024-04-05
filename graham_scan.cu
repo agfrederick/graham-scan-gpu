@@ -5,8 +5,10 @@
 #include <algorithm>
 #include <cstdlib> // For rand()
 #include <GL/glut.h>
-
+#include <iostream>
 #include "kernels.cuh"
+#include <png++/png.hpp>
+#include <GL/freeglut.h>
 
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
@@ -23,6 +25,61 @@ void checkCUDAError(const char *);
 void generatePointCloud(point *pts, int size, float bottomLX, float bottomLY, float squareSize);
 point minPointGPU(points *h_points, points *h_points_result, points *d_points, points *d_points_result);
 void calculateCosAnglesGPU(points *h_points, points *d_points, point p0);
+void renderConvexHull(point *pts, std::stack<point> s);
+
+// class ConvexHullRenderer {
+// public:
+//     ConvexHullRenderer() : points(default_pts), hull(default_hull) {}
+    
+//     void setPoints( point* points){
+//         this->points = points; 
+//     }
+
+//     void setHull(std::stack<point> hull){
+//         this->hull = hull;
+//     }
+
+//     void render() {
+//         glClear(GL_COLOR_BUFFER_BIT);
+
+//         // Set color
+//         glColor3f(1.0f, 0.0f, 0.0f);
+
+//         glBegin(GL_POINTS);
+
+//         // Iterate through the array of points and draw each point
+//         for (int i = 0; i < NUM_POINTS; ++i){
+//             glVertex2f(points[i].x, points[i].y);
+//         }
+
+//         glEnd();
+
+//         // Set color for convex hull
+//         glColor3f(0.0f, 0.0f, 1.0f);
+
+//         // Begin drawing lines for convex hull
+//         glBegin(GL_LINE_LOOP);
+        
+//         point pt;
+//         while (!hull.empty())
+//         {
+//             pt = hull.top();
+//             hull.pop();
+//             glVertex2f(pt.x, pt.y);
+//         }
+//         glEnd();
+
+//         glFlush();
+//     }
+
+// private:
+//     point* default_pts;
+//     std::stack<point> default_hull;
+//     point* points;
+//     std::stack<point> hull;
+// };
+
+// ConvexHullRenderer renderer;
 
 float crossZ(point p1, point p2, point p3)
 {
@@ -175,7 +232,7 @@ void generatePointCloud(point *pts, int size, float bottomLX, float bottomLY, fl
 
 //     glEnd();
 
-//     glFlush(); // Flush OpenGL pipeline
+//     // glFlush(); // Flush OpenGL pipeline
 
 //     glColor3f(1.0, 0.0, 0.0); // Red color
 
@@ -195,17 +252,17 @@ void generatePointCloud(point *pts, int size, float bottomLX, float bottomLY, fl
 //     // Flush OpenGL buffer to display the line
 //     glFlush();
 
-// Save to file
-// unsigned char *pixels = new unsigned char[3 * WIDTH * HEIGHT];
-// glReadPixels(0, 0, WIDTH, HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+//     // Save to file
+//     // unsigned char *pixels = new unsigned char[3 * WIDTH * HEIGHT];
+//     // glReadPixels(0, 0, WIDTH, HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, pixels);
 
-// std::ofstream out("plot.ppm", std::ios::binary);
-// out << "P6\n"
-//     << WIDTH << " " << HEIGHT << "\n255\n";
-// out.write(reinterpret_cast<char *>(pixels), 3 * WIDTH * HEIGHT);
-// out.close();
+//     // std::ofstream out("plot.ppm", std::ios::binary);
+//     // out << "P6\n"
+//     //     << WIDTH << " " << HEIGHT << "\n255\n";
+//     // out.write(reinterpret_cast<char *>(pixels), 3 * WIDTH * HEIGHT);
+//     // out.close();
 
-// delete[] pixels;
+//     // delete[] pixels;
 // }
 
 std::stack<point> grahamScanGPU(point *pts)
@@ -339,6 +396,66 @@ void calculateCosAnglesGPU(points *h_points, points *d_points, point p0)
     cudaEventDestroy(stop);
 }
 
+void renderToImage(const point* points, const std::stack<point>* hull, int width, int height, const std::string& filename) {
+    // Create a framebuffer object
+    GLuint fbo;
+    glGenFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+    // Create a texture to render to
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
+
+    // Set up the viewport
+    glViewport(0, 0, width, height);
+
+    // Render to the texture
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    // Render points
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glBegin(GL_POINTS);
+    // Iterate through the array of points and draw each point
+    for (int i = 0; i < NUM_POINTS; ++i){
+        glVertex2f(points[i].x, points[i].y);
+    }
+    glEnd();
+
+    // Render hull
+    glColor3f(0.0f, 0.0f, 1.0f);
+    glBegin(GL_LINE_LOOP);
+    std::stack<point> hullCopy = hull;
+    point pt;
+    while (!hullCopy.empty())
+    {
+        pt = hullCopy.top();
+        hullCopy.pop();
+        glVertex2f(pt.x, pt.y);
+    }
+    glEnd();
+
+    // Read the rendered image data from the texture
+    std::vector<unsigned char> pixels(4 * width * height);
+    glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+
+    // Save the image to a PNG file
+    png::image<png::rgba_pixel> image(width, height);
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            int index = (y * width + x) * 4;
+            image[y][x] = png::rgba_pixel(pixels[index], pixels[index + 1], pixels[index + 2], pixels[index + 3]);
+        }
+    }
+    image.write(filename);
+
+    // Clean up
+    glDeleteTextures(1, &texture);
+    glDeleteFramebuffers(1, &fbo);
+}
+
 void checkCUDAError(const char *msg)
 {
     cudaError_t err = cudaGetLastError();
@@ -349,22 +466,13 @@ void checkCUDAError(const char *msg)
     }
 }
 
+// void display(){
+//     renderer.render();
+// }
+
 int main(int argc, char **argv)
 {
-    // glutInit(&argc, argv);
-    // glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
-    // glutInitWindowSize(WIDTH, HEIGHT);
-    // glutCreateWindow("OpenGL Plot");
-    // glutDisplayFunc(renderConvexHull);
-    // glClearColor(0.0, 0.0, 0.0, 1.0);
-
-    // // // Set up the projection matrix
-    // // glMatrixMode(GL_PROJECTION);
-    // // glLoadIdentity();
-    // // gluOrtho2D(-1.0, 1.0, -1.0, 1.0);
-
-    // // Start the GLUT main loop
-    // glutMainLoop();
+    
     // TODO
     point pointsArray[NUM_POINTS];
     point pointsArray2[NUM_POINTS];
@@ -387,6 +495,27 @@ int main(int argc, char **argv)
     }
 
     std::stack<point> s_gpu = grahamScanGPU(pointsArray2);
+    renderToImage(pointsArray2, s_gpu, 800, 600, "rendered_image.png");
+    // renderer.setPoints(pointsArray2);
+    // renderer.setHull(s_gpu);
+    // renderer.render();
+    // glutInit(&argc, argv);
+    // glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
+    // glutInitWindowSize(WIDTH, HEIGHT);
+    // glutCreateWindow("OpenGL Plot");
+    // glClearColor(1.0, 1.0, 1.0, 1.0);
+    // gluOrtho2D(0.0, 10.0, 0.0, 10.0); // Set the coordinate system
+    // glutDisplayFunc(display);
+    // glClearColor(0.0, 0.0, 0.0, 1.0);
+
+    // // Set up the projection matrix
+    // glMatrixMode(GL_PROJECTION);
+    // glLoadIdentity();
+    // gluOrtho2D(-1.0, 1.0, -1.0, 1.0);
+
+    // Start the GLUT main loop
+    // glutMainLoop();
+    
     while (!s_gpu.empty())
     {
         pt = s_gpu.top();
