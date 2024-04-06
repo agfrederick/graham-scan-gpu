@@ -42,6 +42,17 @@ void pointArrayToPoints(point *pts, points *output)
     }
 }
 
+bool checkFloatEqual(float f1, float f2)
+{
+    float eps = 0.00001;
+    float diff = f1 - f2;
+    if (diff < 0)
+    {
+        diff = diff * -1;
+    }
+    return diff < eps;
+}
+
 std::stack<point> grahamScanCPU(point *pts)
 {
     int i;
@@ -54,9 +65,9 @@ std::stack<point> grahamScanCPU(point *pts)
         {
             min_pt_index = i;
         }
-        else if (pts[i].y == pts[min_pt_index].y) // TODO: better equality test for floats
+        else if (checkFloatEqual(pts[i].y, pts[min_pt_index].y))
         {
-            if (pts[i].x < pts[min_pt_index].x || pts[i].x == pts[min_pt_index].x) // TODO: better equality test for floats
+            if (pts[i].x < pts[min_pt_index].x || checkFloatEqual(pts[i].x, pts[min_pt_index].x))
             {
                 min_pt_index = i;
             }
@@ -228,7 +239,7 @@ point minPointGPU(points *h_points, points *h_points_result, points *d_points, p
             min_pt.x = x;
             min_pt.y = y;
         }
-        else if (y == min_pt.y) // TODO: float comparison
+        else if (checkFloatEqual(y, min_pt.y))
         {
             if (x < min_pt.x)
             {

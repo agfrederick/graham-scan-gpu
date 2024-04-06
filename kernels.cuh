@@ -1,7 +1,7 @@
 #ifndef KERNEL_H
 #define KERNEL_H
 
-#define NUM_POINTS 32 // TODO: try different numbers of points
+#define NUM_POINTS 16 // TODO: try different numbers of points
 #define THREADS_PER_BLOCK 4
 
 #include <stdio.h>
@@ -25,6 +25,17 @@ struct points
     float y[NUM_POINTS];
     float angle[NUM_POINTS];
 };
+
+__device__ bool checkFloatEqualGPU(float f1, float f2)
+{
+    float eps = 0.00001;
+    float diff = f1 - f2;
+    if (diff < 0)
+    {
+        diff = diff * -1;
+    }
+    return diff < eps;
+}
 
 __global__ void lowestPoint_kernel(points *d_points, points *d_reduced_points)
 {
@@ -55,7 +66,7 @@ __global__ void lowestPoint_kernel(points *d_points, points *d_reduced_points)
             {
                 shared_points[i] = shared_points[i + stride];
             }
-            else if (shared_points[i].y == shared_points[i + stride].y) // TODO: better float equality check
+            else if (checkFloatEqualGPU(shared_points[i].y, shared_points[i + stride].y)) // TODO: better float equality check
             {
                 if (shared_points[i].x > shared_points[i + stride].x)
                 {
@@ -90,7 +101,7 @@ __global__ void findCosAngles_kernel(points *d_points, point p0)
     float cos_theta;
     pt.x = d_points->x[idx];
     pt.y = d_points->y[idx];
-    if (pt.x != p0.x && pt.y != p0.y) // TODO: float equality
+    if (!checkFloatEqualGPU(pt.x, p0.x) && !checkFloatEqualGPU(pt.y, p0.y))
     {
         v.x = pt.x - p0.x;
         v.y = pt.y - p0.y;
