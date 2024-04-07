@@ -13,6 +13,9 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
+const int WIDTH = 800;
+const int HEIGHT = 600;
+
 int SIZE = NUM_POINTS;    // Size of the point cloud
 float BOTTOMLEFTX = 0.0f; // Bottom left corner of the square
 float BOTTOMLEFTY = 0.0f;
@@ -22,6 +25,7 @@ void checkCUDAError(const char *);
 void generatePointCloud(point *pts, int size, float bottomLX, float bottomLY, float squareSize);
 point minPointGPU(points *h_points, points *h_points_result, points *d_points, points *d_points_result);
 void calculateCosAnglesGPU(points *h_points, points *d_points, point p0);
+points sortPointsByAngleGPU(points *h_points, points *d_points, point p0);
 
 float crossZ(point p1, point p2, point p3)
 {
@@ -42,17 +46,6 @@ void pointArrayToPoints(point *pts, points *output)
     }
 }
 
-bool checkFloatEqual(float f1, float f2)
-{
-    float eps = 0.00001;
-    float diff = f1 - f2;
-    if (diff < 0)
-    {
-        diff = diff * -1;
-    }
-    return diff < eps;
-}
-
 std::stack<point> grahamScanCPU(point *pts)
 {
     int i;
@@ -65,9 +58,9 @@ std::stack<point> grahamScanCPU(point *pts)
         {
             min_pt_index = i;
         }
-        else if (checkFloatEqual(pts[i].y, pts[min_pt_index].y))
+        else if (fabs(pts[i].y - pts[min_pt_index].y) < EPSILON) // Check for y equality with epsilon
         {
-            if (pts[i].x < pts[min_pt_index].x || checkFloatEqual(pts[i].x, pts[min_pt_index].x))
+            if (pts[i].x < pts[min_pt_index].x || fabs(pts[i].x - pts[min_pt_index].x) < EPSILON) // Check for x equality with epsilon
             {
                 min_pt_index = i;
             }
@@ -103,10 +96,10 @@ std::stack<point> grahamScanCPU(point *pts)
             pts[i].angle = cos_theta;
         }
     }
-    for (int i = 0; i < NUM_POINTS; ++i)
-    {
-        // printf("pt angle CPU: (%f, %f) %f\n", pts[i].x, pts[i].y, pts[i].angle);
-    }
+    // for (int i = 0; i < NUM_POINTS; ++i)
+    // {
+    //     printf("pt angle CPU: (%f, %f) %f\n", pts[i].x, pts[i].y, pts[i].angle);
+    // }
 
     for (i = 0; i < NUM_POINTS; ++i)
     {
@@ -163,9 +156,60 @@ void generatePointCloud(point *pts, int size, float bottomLX, float bottomLY, fl
     {
         pts[i].x = bottomLX + static_cast<float>(rand()) / RAND_MAX * squareSize;
         pts[i].y = bottomLY + static_cast<float>(rand()) / RAND_MAX * squareSize;
-        // printf("Rand pt: (%f, %f)\n", pts[i].x, pts[i].y);
+        printf("Rand pt: (%f, %f)\n", pts[i].x, pts[i].y);
     }
 }
+
+// TODO: function for rendering point cloud with convex hull
+// void renderConvexHull(point *pts, std::stack<point> s)
+// {
+//     glClear(GL_COLOR_BUFFER_BIT); // Clear the color buffer
+
+//     // Set color
+//     glColor3f(1.0f, 0.0f, 0.0f);
+
+//     glBegin(GL_POINTS);
+
+//     // Iterate through the array of points and draw each point
+//     for (int i = 0; i < NUM_POINTS; ++i)
+//     {
+//         glVertex2f(pts[i].x, pts[i].y);
+//     }
+
+//     glEnd();
+
+//     glFlush(); // Flush OpenGL pipeline
+
+//     glColor3f(1.0, 0.0, 0.0); // Red color
+
+//     // Begin drawing lines
+//     glBegin(GL_LINES);
+
+//     point pt;
+//     while (!s.empty())
+//     {
+//         pt = s.top();
+//         s.pop();
+//         glVertex2f(pt.x, pt.y);
+//     }
+
+//     glEnd();
+
+//     // Flush OpenGL buffer to display the line
+//     glFlush();
+
+// Save to file
+// unsigned char *pixels = new unsigned char[3 * WIDTH * HEIGHT];
+// glReadPixels(0, 0, WIDTH, HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+
+// std::ofstream out("plot.ppm", std::ios::binary);
+// out << "P6\n"
+//     << WIDTH << " " << HEIGHT << "\n255\n";
+// out.write(reinterpret_cast<char *>(pixels), 3 * WIDTH * HEIGHT);
+// out.close();
+
+// delete[] pixels;
+// }
 
 std::stack<point> grahamScanGPU(point *pts)
 {
@@ -188,8 +232,44 @@ std::stack<point> grahamScanGPU(point *pts)
     calculateCosAnglesGPU(h_points, d_points, p0);
 
     // sort points using cosine angle and min point
+    sortPointsByAngleGPU(h_points, d_points, p0);
 
     std::stack<point> s;
+    s.push(p0);
+    point p1;
+    p1.x = h_points->x[0];
+    p1.y = h_points->y[0];
+    s.push(p1);
+    point p2;
+    p2.x = h_points->x[1];
+    p2.y = h_points->y[1];
+    s.push(p2);
+
+    for (int j = 2; j < NUM_POINTS; ++j)
+    {
+        point pj;
+        pj.x = h_points->x[j];
+        pj.y = h_points->y[j];
+        point top = s.top();
+        s.pop();
+        point next_top = s.top();
+        s.pop();
+        s.push(next_top);
+        s.push(top);
+        float cross_z = crossZ(pj, top, next_top);
+        while (cross_z < 0)
+        {
+            s.pop();
+            point top = s.top();
+            s.pop();
+            point next_top = s.top();
+            s.pop();
+            s.push(next_top);
+            s.push(top);
+            cross_z = crossZ(pj, top, next_top);
+        }
+        s.push(pj);
+    }
 
     return s;
 }
@@ -222,15 +302,21 @@ point minPointGPU(points *h_points, points *h_points_result, points *d_points, p
     checkCUDAError("Min point: CUDA memcpy");
 
     cudaEventRecord(start, 0);
-    int blocks = NUM_POINTS / THREADS_PER_BLOCK;
-    dim3 numBlocks(blocks);
+
+    dim3 numBlocks(NUM_BLOCKS);
     dim3 threadsPerBlock(THREADS_PER_BLOCK);
+
     lowestPoint_kernel<<<numBlocks, threadsPerBlock>>>(d_points, d_points_result);
+    checkCUDAError("Min point: CUDA kernel");
+
     cudaDeviceSynchronize();
+    checkCUDAError("Min point: CUDA dev sync");
+
     cudaMemcpy(h_points_result, d_points_result, sizeof(points), cudaMemcpyDeviceToHost);
+    checkCUDAError("Min point: CUDA memcpy back");
 
     // Reduce the block level results on CPU
-    for (int i = 0; i < blocks; ++i)
+    for (int i = 0; i < NUM_BLOCKS; ++i)
     {
         float x = h_points_result->x[i];
         float y = h_points_result->y[i];
@@ -239,7 +325,7 @@ point minPointGPU(points *h_points, points *h_points_result, points *d_points, p
             min_pt.x = x;
             min_pt.y = y;
         }
-        else if (checkFloatEqual(y, min_pt.y))
+        else if (y == min_pt.y) // TODO: float comparison
         {
             if (x < min_pt.x)
             {
@@ -254,7 +340,7 @@ point minPointGPU(points *h_points, points *h_points_result, points *d_points, p
     cudaEventElapsedTime(&time, start, stop);
 
     // output result
-    printf("GPU lowest point was found at %f, %f\n", min_pt.x, min_pt.y);
+    printf("GPU lowest point was found at (%f, %f)\n", min_pt.x, min_pt.y);
     printf("\tExecution time was %f ms\n", time);
 
     cudaEventDestroy(start);
@@ -273,15 +359,22 @@ void calculateCosAnglesGPU(points *h_points, points *d_points, point p0)
 
     // memory copy records to device
     cudaMemcpy(d_points, h_points, sizeof(points), cudaMemcpyHostToDevice);
-    checkCUDAError("anlges: CUDA memcpy");
+    checkCUDAError("angles: CUDA memcpy forward");
 
     cudaEventRecord(start, 0);
-    int blocks = NUM_POINTS / THREADS_PER_BLOCK;
-    dim3 numBlocks(blocks);
+
+    dim3 numBlocks(NUM_BLOCKS);
     dim3 threadsPerBlock(THREADS_PER_BLOCK);
+
     findCosAngles_kernel<<<numBlocks, threadsPerBlock>>>(d_points, p0);
+    checkCUDAError("angles: CUDA kernel");
+
     cudaDeviceSynchronize();
+    checkCUDAError("angles: CUDA dev sync");
+
     cudaMemcpy(h_points, d_points, sizeof(points), cudaMemcpyDeviceToHost);
+    checkCUDAError("angles: CUDA memcpy back");
+
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
@@ -289,14 +382,64 @@ void calculateCosAnglesGPU(points *h_points, points *d_points, point p0)
     // output result
     printf("\tExecution time for angle finding was %f ms\n", time);
 
-    for (int i = 0; i < NUM_POINTS; ++i)
-    {
-        // printf("pt angle GPU: (%f, %f) %f\n", h_points->x[i], h_points->y[i], h_points->angle[i]);
-    }
+    // for (int i = 0; i < NUM_POINTS; ++i)
+    // {
+    //     printf("pt angle GPU: (%f, %f) %f\n", h_points->x[i], h_points->y[i], h_points->angle[i]);
+    // }
 
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
 }
+
+
+
+// create function for sorting points by angle
+points sortPointsByAngleGPU(points *h_points, points *d_points, point p0)
+{
+    unsigned int i;
+    float time;
+    cudaEvent_t start, stop;
+
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    // memory copy records to device
+    cudaMemcpy(d_points, h_points, sizeof(points), cudaMemcpyHostToDevice);
+    checkCUDAError("sorting: CUDA memcpy forward");
+
+    cudaEventRecord(start, 0);
+
+    dim3 numBlocks(NUM_BLOCKS);
+    dim3 threadsPerBlock(THREADS_PER_BLOCK);
+
+    sorting_kernel<<<numBlocks, threadsPerBlock>>>(d_points);
+    checkCUDAError("sorting: CUDA kernel");
+
+    cudaDeviceSynchronize();
+    checkCUDAError("sorting: CUDA dev sync");
+
+    cudaMemcpy(h_points, d_points, sizeof(points), cudaMemcpyDeviceToHost);
+    checkCUDAError("sorting: CUDA memcpy back");
+
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
+
+    // output result
+    printf("\tExecution time for sorting time was %f ms\n", time);
+
+    for (int i = 0; i < NUM_POINTS; ++i)
+    {
+        printf("pt angle GPU: (%f, %f) %f\n", h_points->x[i], h_points->y[i], h_points->angle[i]);
+    }
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+
+    return *h_points;
+}
+
+
 
 void checkCUDAError(const char *msg)
 {
@@ -307,6 +450,8 @@ void checkCUDAError(const char *msg)
         exit(EXIT_FAILURE);
     }
 }
+
+
 
 void writeToFile(point *pts, int num_points, std::stack<point> s, const std::string &filename_pts, const std::string &filename_stack)
 {
@@ -345,8 +490,25 @@ void writeToFile(point *pts, int num_points, std::stack<point> s, const std::str
     std::cout << "Points and stack written to " << filename_pts << " " << filename_stack << std::endl;
 }
 
+
+
 int main(int argc, char **argv)
 {
+    // glutInit(&argc, argv);
+    // glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
+    // glutInitWindowSize(WIDTH, HEIGHT);
+    // glutCreateWindow("OpenGL Plot");
+    // glutDisplayFunc(renderConvexHull);
+    // glClearColor(0.0, 0.0, 0.0, 1.0);
+
+    // // // Set up the projection matrix
+    // // glMatrixMode(GL_PROJECTION);
+    // // glLoadIdentity();
+    // // gluOrtho2D(-1.0, 1.0, -1.0, 1.0);
+
+    // // Start the GLUT main loop
+    // glutMainLoop();
+    // TODO
     point pointsArray[NUM_POINTS];
     point pointsArray2[NUM_POINTS];
 
@@ -359,17 +521,12 @@ int main(int argc, char **argv)
     }
 
     point pt;
+
     std::stack<point> s_cpu = grahamScanCPU(pointsArray);
     writeToFile(pointsArray, NUM_POINTS, s_cpu, "cpu_points.txt", "cpu_stack.txt");
-    // while (!s_cpu.empty())
-    // {
-    //     pt = s_cpu.top();
-    //     s_cpu.pop();
-    //     printf("CPU stack point (%f, %f)\n", pt.x, pt.y);
-    // }
+
 
     std::stack<point> s_gpu = grahamScanGPU(pointsArray2);
-    writeToFile(pointsArray2, NUM_POINTS, s_gpu, "gpu_points.txt", "gpu_stack.txt");
 
     // while (!s_gpu.empty())
     // {
@@ -377,4 +534,6 @@ int main(int argc, char **argv)
     //     s_gpu.pop();
     //     printf("GPU stack point (%f, %f)\n", pt.x, pt.y);
     // }
+
+    writeToFile(pointsArray2, NUM_POINTS, s_gpu, "gpu_points.txt", "gpu_stack.txt");
 }

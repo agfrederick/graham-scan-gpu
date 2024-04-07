@@ -1,8 +1,11 @@
 #ifndef KERNEL_H
 #define KERNEL_H
 
-#define NUM_POINTS 16 // TODO: try different numbers of points
-#define THREADS_PER_BLOCK 4
+#define NUM_POINTS 256 // TODO: try different numbers of points
+#define THREADS_PER_BLOCK 256
+#define NUM_BLOCKS (NUM_POINTS/THREADS_PER_BLOCK)
+#define EPSILON 1e-6f // Example value, adjust as needed
+
 
 #include <stdio.h>
 #include <math.h>
@@ -26,17 +29,6 @@ struct points
     float angle[NUM_POINTS];
 };
 
-__device__ bool checkFloatEqualGPU(float f1, float f2)
-{
-    float eps = 0.00001;
-    float diff = f1 - f2;
-    if (diff < 0)
-    {
-        diff = diff * -1;
-    }
-    return diff < eps;
-}
-
 __global__ void lowestPoint_kernel(points *d_points, points *d_reduced_points)
 {
     // find index of point with lowest y-val
@@ -52,7 +44,6 @@ __global__ void lowestPoint_kernel(points *d_points, points *d_reduced_points)
     pt.x = d_points->x[idx];
     pt.y = d_points->y[idx];
     shared_points[shared_idx] = pt;
-    // printf("loading mark %f to shared mem index %d\n", record.assignment_mark, shared_idx);
     __syncthreads();
 
     // reduce
@@ -61,12 +52,11 @@ __global__ void lowestPoint_kernel(points *d_points, points *d_reduced_points)
     {
         if (shared_idx % stride == 0)
         {
-            // printf("Comparing idx %d, %d, vals %f, %f\n", i, i + stride, shared_points[i].y, shared_points[i + stride].y);
             if (shared_points[i].y > shared_points[i + stride].y)
             {
                 shared_points[i] = shared_points[i + stride];
             }
-            else if (checkFloatEqualGPU(shared_points[i].y, shared_points[i + stride].y)) // TODO: better float equality check
+            else if (fabs(shared_points[i].y - shared_points[i + stride].y) < EPSILON)
             {
                 if (shared_points[i].x > shared_points[i + stride].x)
                 {
@@ -74,23 +64,22 @@ __global__ void lowestPoint_kernel(points *d_points, points *d_reduced_points)
                 }
             }
         }
-        __syncthreads();
+        // __syncthreads();
     }
+        __syncthreads();
+
     if (shared_idx == 0)
     {
         d_reduced_points->x[blockIdx.x] = shared_points[0].x;
         d_reduced_points->y[blockIdx.x] = shared_points[0].y;
     }
-    __syncthreads();
+    
 }
 
 __global__ void findCosAngles_kernel(points *d_points, point p0)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    // if not lowest point p0:
-    // Compute vector
-    // Find cosine of angle with x-axis, store in angle entry of struct
-    // calculate the angle associated with each points vector from p0
+
     point unit_x;
     unit_x.x = 1;
     unit_x.y = 0;
@@ -101,7 +90,7 @@ __global__ void findCosAngles_kernel(points *d_points, point p0)
     float cos_theta;
     pt.x = d_points->x[idx];
     pt.y = d_points->y[idx];
-    if (!checkFloatEqualGPU(pt.x, p0.x) && !checkFloatEqualGPU(pt.y, p0.y))
+    if (fabs(pt.x - p0.x) > EPSILON && fabs(pt.y - p0.y) > EPSILON)
     {
         v.x = pt.x - p0.x;
         v.y = pt.y - p0.y;
@@ -111,10 +100,45 @@ __global__ void findCosAngles_kernel(points *d_points, point p0)
     }
 }
 
-__global__ void sorting_kernel(points *d_pts)
+
+__global__ void sorting_kernel(points *d_points)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    // TODO
+
+    // sort solely by angle in point struct
+    if (idx < NUM_POINTS) {
+
+        for (int i = 0; i < NUM_POINTS - 1; i++) {
+
+            for (int j = 0; j < NUM_POINTS - i - 1; j++) {
+
+                if (d_points->angle[j] > d_points->angle[j+1]) {
+
+                    // selection sort
+
+                    point temp;
+
+                    temp.x = d_points->x[j];
+                    temp.y = d_points->y[j];
+                    temp.angle = d_points->angle[j];
+
+                    d_points->x[j] = d_points->x[j + 1];
+                    d_points->y[j] = d_points->y[j + 1];
+                    d_points->angle[j] = d_points->angle[j + 1];
+
+                    d_points->x[j + 1] = temp.x;
+                    d_points->y[j + 1] = temp.y;
+                    d_points->angle[j + 1] = temp.angle;
+
+                    __syncthreads();
+
+                }
+
+            }
+        }
+    }
+    
 }
+
 
 #endif // KERNEL_H

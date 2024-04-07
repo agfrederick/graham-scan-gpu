@@ -31,5 +31,10 @@ if __name__ == "__main__":
     # out_filename = input("\nEnter filename for output: ")
     pts_filename = "outputs/cpu_points.txt"
     hull_filename = "outputs/cpu_stack.txt"
-    out_filename = "outputs/plot.png"
+    out_filename = "outputs/cpu_plot.png"
+    render(pts_filename, hull_filename, out_filename)
+
+    pts_filename = "outputs/gpu_points.txt"
+    hull_filename = "outputs/gpu_stack.txt"
+    out_filename = "outputs/gpu_plot.png"
     render(pts_filename, hull_filename, out_filename)
