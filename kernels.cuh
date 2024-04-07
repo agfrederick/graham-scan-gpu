@@ -1,8 +1,8 @@
 #ifndef KERNEL_H
 #define KERNEL_H
 
-#define NUM_POINTS 256 // TODO: try different numbers of points
-#define THREADS_PER_BLOCK 256
+#define NUM_POINTS 32 // TODO: try different numbers of points
+#define THREADS_PER_BLOCK 32
 #define NUM_BLOCKS (NUM_POINTS/THREADS_PER_BLOCK)
 #define EPSILON 1e-6f // Example value, adjust as needed
 
@@ -31,50 +31,47 @@ struct points
 
 __global__ void lowestPoint_kernel(points *d_points, points *d_reduced_points)
 {
-    // find index of point with lowest y-val
-    // if multiple, break tie with lowest x-val
-    // Reference: lab3
     __shared__ point shared_points[NUM_POINTS];
 
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    int shared_idx = threadIdx.x;
 
-    // load a point into shared memory
-    point pt;
-    pt.x = d_points->x[idx];
-    pt.y = d_points->y[idx];
-    shared_points[shared_idx] = pt;
-    __syncthreads();
-
-    // reduce
-    int i = 2 * shared_idx;
-    for (int stride = 1; stride < THREADS_PER_BLOCK; stride *= 2)
+    if (idx < NUM_POINTS)
     {
-        if (shared_idx % stride == 0)
-        {
-            if (shared_points[i].y > shared_points[i + stride].y)
-            {
-                shared_points[i] = shared_points[i + stride];
-            }
-            else if (fabs(shared_points[i].y - shared_points[i + stride].y) < EPSILON)
-            {
-                if (shared_points[i].x > shared_points[i + stride].x)
-                {
-                    shared_points[i] = shared_points[i + stride];
-                }
-            }
-        }
-        // __syncthreads();
-    }
+        // Each thread loads a point into shared memory
+        point pt;
+        pt.x = d_points->x[idx];
+        pt.y = d_points->y[idx];
+        shared_points[threadIdx.x] = pt;
         __syncthreads();
 
-    if (shared_idx == 0)
-    {
-        d_reduced_points->x[blockIdx.x] = shared_points[0].x;
-        d_reduced_points->y[blockIdx.x] = shared_points[0].y;
+        // Reduce 
+        for (int stride = blockDim.x / 2; stride > 0; stride >>= 1)
+        {
+            // printf("Block %d: (%f, %f)\n", blockIdx.x, shared_points[threadIdx.x].x, shared_points[threadIdx.x].y);
+
+            if (threadIdx.x < stride)
+            {
+                if (shared_points[threadIdx.x].y > shared_points[threadIdx.x + stride].y ||
+                    (fabs(shared_points[threadIdx.x].y - shared_points[threadIdx.x + stride].y) < EPSILON &&
+                    shared_points[threadIdx.x].x > shared_points[threadIdx.x + stride].x))
+                {
+                    shared_points[threadIdx.x] = shared_points[threadIdx.x + stride];
+                }
+            }
+            // __syncthreads();
+        }
+            __syncthreads();
+
+        // Store the minimum point of each block to output array
+        if (threadIdx.x == 0)
+        {
+            // printf("Block %d: (%f, %f)\n", blockIdx.x, shared_points[0].x, shared_points[0].y);
+            d_reduced_points->x[blockIdx.x] = shared_points[0].x;
+            d_reduced_points->y[blockIdx.x] = shared_points[0].y;
+        }
     }
-    
 }
+
 
 __global__ void findCosAngles_kernel(points *d_points, point p0)
 {

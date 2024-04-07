@@ -122,27 +122,22 @@ std::stack<point> grahamScanCPU(point *pts)
     s.push(p0);
     s.push(pts[0]);
     s.push(pts[1]);
-    for (int j = 2; j < NUM_POINTS - 1; ++j)
+    for (int j = 2; j < NUM_POINTS - 1; j++)
     {
         point pj = pts[j];
-        point top = s.top();
-        s.pop();
-        point next_top = s.top();
-        s.pop();
-        s.push(next_top);
-        s.push(top);
-        float cross_z = crossZ(pj, top, next_top);
-        while (cross_z < 0)
-        {
-            s.pop();
+        while (s.size() >= 2) {
             point top = s.top();
             s.pop();
-            point next_top = s.top();
-            s.pop();
-            s.push(next_top);
+            point nextTop = s.top();
             s.push(top);
-            cross_z = crossZ(pj, top, next_top);
+
+            if (crossZ(pj, top, nextTop) < 0) {
+                s.pop();
+            } else {
+                break;
+            }
         }
+
         s.push(pj);
     }
     return s;
@@ -152,11 +147,11 @@ std::stack<point> grahamScanCPU(point *pts)
 // Generates an array of type point
 void generatePointCloud(point *pts, int size, float bottomLX, float bottomLY, float squareSize)
 {
-    for (int i = 0; i < size; ++i)
+    for (int i = 0; i < size; i++)
     {
         pts[i].x = bottomLX + static_cast<float>(rand()) / RAND_MAX * squareSize;
         pts[i].y = bottomLY + static_cast<float>(rand()) / RAND_MAX * squareSize;
-        printf("Rand pt: (%f, %f)\n", pts[i].x, pts[i].y);
+        // printf("Rand pt: (%f, %f)\n", pts[i].x, pts[i].y);
     }
 }
 
@@ -235,6 +230,7 @@ std::stack<point> grahamScanGPU(point *pts)
     sortPointsByAngleGPU(h_points, d_points, p0);
 
     std::stack<point> s;
+
     s.push(p0);
     point p1;
     p1.x = h_points->x[0];
@@ -245,31 +241,27 @@ std::stack<point> grahamScanGPU(point *pts)
     p2.y = h_points->y[1];
     s.push(p2);
 
-    for (int j = 2; j < NUM_POINTS; ++j)
-    {
+    for (int j = 2; j < NUM_POINTS-1; j++) {
         point pj;
         pj.x = h_points->x[j];
         pj.y = h_points->y[j];
-        point top = s.top();
-        s.pop();
-        point next_top = s.top();
-        s.pop();
-        s.push(next_top);
-        s.push(top);
-        float cross_z = crossZ(pj, top, next_top);
-        while (cross_z < 0)
-        {
-            s.pop();
+
+        while (s.size() >= 2) {
             point top = s.top();
             s.pop();
-            point next_top = s.top();
-            s.pop();
-            s.push(next_top);
+            point nextTop = s.top();
             s.push(top);
-            cross_z = crossZ(pj, top, next_top);
+
+            if (crossZ(pj, top, nextTop) < 0) {
+                s.pop();
+            } else {
+                break;
+            }
         }
+
         s.push(pj);
     }
+
 
     return s;
 }
@@ -325,9 +317,9 @@ point minPointGPU(points *h_points, points *h_points_result, points *d_points, p
             min_pt.x = x;
             min_pt.y = y;
         }
-        else if (y == min_pt.y) // TODO: float comparison
+        else if (fabs(y - min_pt.y) < EPSILON) // Compare with epsilon
         {
-            if (x < min_pt.x)
+            if (x < min_pt.x || fabs(x - min_pt.x) < EPSILON) // Compare with epsilon
             {
                 min_pt.x = x;
                 min_pt.y = y;
@@ -341,7 +333,7 @@ point minPointGPU(points *h_points, points *h_points_result, points *d_points, p
 
     // output result
     printf("GPU lowest point was found at (%f, %f)\n", min_pt.x, min_pt.y);
-    printf("\tExecution time was %f ms\n", time);
+    printf("\tExecution time for lowest point was %f ms\n", time);
 
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
@@ -428,10 +420,10 @@ points sortPointsByAngleGPU(points *h_points, points *d_points, point p0)
     // output result
     printf("\tExecution time for sorting time was %f ms\n", time);
 
-    for (int i = 0; i < NUM_POINTS; ++i)
-    {
-        printf("pt angle GPU: (%f, %f) %f\n", h_points->x[i], h_points->y[i], h_points->angle[i]);
-    }
+    // for (int i = 0; i < NUM_POINTS; ++i)
+    // {
+    //     printf("pt angle GPU: (%f, %f) %f\n", h_points->x[i], h_points->y[i], h_points->angle[i]);
+    // }
 
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
@@ -481,7 +473,7 @@ void writeToFile(point *pts, int num_points, std::stack<point> s, const std::str
     {
         pt = s.top();
         s.pop();
-        printf("Writing stack point (%f, %f)\n", pt.x, pt.y);
+        // printf("Writing stack point (%f, %f)\n", pt.x, pt.y);
         outFile2 << std::fixed << std::setprecision(2) << pt.x << " " << pt.y << std::endl;
     }
 
@@ -520,20 +512,12 @@ int main(int argc, char **argv)
         pointsArray2[i] = pointsArray[i];
     }
 
-    point pt;
+    // point pt;
 
     std::stack<point> s_cpu = grahamScanCPU(pointsArray);
     writeToFile(pointsArray, NUM_POINTS, s_cpu, "cpu_points.txt", "cpu_stack.txt");
 
 
     std::stack<point> s_gpu = grahamScanGPU(pointsArray2);
-
-    // while (!s_gpu.empty())
-    // {
-    //     pt = s_gpu.top();
-    //     s_gpu.pop();
-    //     printf("GPU stack point (%f, %f)\n", pt.x, pt.y);
-    // }
-
     writeToFile(pointsArray2, NUM_POINTS, s_gpu, "gpu_points.txt", "gpu_stack.txt");
 }
