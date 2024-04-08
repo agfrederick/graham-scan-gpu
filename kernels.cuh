@@ -1,8 +1,8 @@
 #ifndef KERNEL_H
 #define KERNEL_H
 
-#define NUM_POINTS 32 // TODO: try different numbers of points
-#define THREADS_PER_BLOCK 32
+#define NUM_POINTS 64 // TODO: try different numbers of points
+#define THREADS_PER_BLOCK 64
 #define NUM_BLOCKS (NUM_POINTS/THREADS_PER_BLOCK)
 #define EPSILON 1e-6f // Example value, adjust as needed
 
@@ -102,12 +102,34 @@ __global__ void findCosAngles_kernel(points *d_points, point p0)
 }
 
 
-__global__ void sorting_kernel(points *d_points) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void merge_basic_kernel(points *d_points) {
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
 
-    // try implementing tiled merge sort
+    if (tid < NUM_POINTS) {
+        // Merge operation using bubble sort
+        for (int i = 0; i < NUM_POINTS - 1; i++) {
+            for (int j = 0; j < NUM_POINTS - i - 1; j++) {
+                // Compare angles
+                if (d_points->angle[j] > d_points->angle[j + 1]) {
+                    // Swap
+                    point temp;
+                    temp.x = d_points->x[j];
+                    temp.y = d_points->y[j];
+                    temp.angle = d_points->angle[j];
 
+                    d_points->x[j] = d_points->x[j + 1];
+                    d_points->y[j] = d_points->y[j + 1];
+                    d_points->angle[j] = d_points->angle[j + 1];
 
+                    d_points->x[j + 1] = temp.x;
+                    d_points->y[j + 1] = temp.y;
+                    d_points->angle[j + 1] = temp.angle;
+
+                }
+            }
+        }
+        __syncthreads();
+    }
 }
 
 

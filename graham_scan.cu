@@ -448,7 +448,7 @@ points sortPointsByAngleGPU(points *h_points, points *d_points, point p0)
     dim3 numBlocks(NUM_BLOCKS);
     dim3 threadsPerBlock(THREADS_PER_BLOCK);
 
-    sorting_kernel<<<numBlocks, threadsPerBlock>>>(d_points);
+    merge_basic_kernel<<<numBlocks, threadsPerBlock>>>(d_points);
     checkCUDAError("sorting: CUDA kernel");
 
     cudaDeviceSynchronize();
