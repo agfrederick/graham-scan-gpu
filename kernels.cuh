@@ -95,47 +95,21 @@ __global__ void findCosAngles_kernel(points *d_points, point p0)
         cos_theta = (v.x * unit_x.x + v.y * unit_x.y) / len_v;
         d_points->angle[idx] = cos_theta;
     }
+    else
+    {
+        d_points->angle[idx] = INFINITY;
+    }
 }
 
 
-__global__ void sorting_kernel(points *d_points)
-{
+__global__ void sorting_kernel(points *d_points) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-    // sort solely by angle in point struct
-    if (idx < NUM_POINTS) {
+    // try implementing tiled merge sort
 
-        for (int i = 0; i < NUM_POINTS - 1; i++) {
 
-            for (int j = 0; j < NUM_POINTS - i - 1; j++) {
-
-                if (d_points->angle[j] > d_points->angle[j+1]) {
-
-                    // selection sort
-
-                    point temp;
-
-                    temp.x = d_points->x[j];
-                    temp.y = d_points->y[j];
-                    temp.angle = d_points->angle[j];
-
-                    d_points->x[j] = d_points->x[j + 1];
-                    d_points->y[j] = d_points->y[j + 1];
-                    d_points->angle[j] = d_points->angle[j + 1];
-
-                    d_points->x[j + 1] = temp.x;
-                    d_points->y[j + 1] = temp.y;
-                    d_points->angle[j + 1] = temp.angle;
-
-                    __syncthreads();
-
-                }
-
-            }
-        }
-    }
-    
 }
+
 
 
 #endif // KERNEL_H

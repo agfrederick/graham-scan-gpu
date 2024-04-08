@@ -39,10 +39,12 @@ void pointArrayToPoints(point *pts, points *output)
         // get values from array of structs
         float x = pts[i].x;
         float y = pts[i].y;
+        float angle = pts[i].angle;
 
         // assign values to struct arrays
         output->x[i] = x;
         output->y[i] = y;
+        output->angle[i] = angle;
     }
 }
 
@@ -90,7 +92,7 @@ std::stack<point> grahamScanCPU(point *pts)
             pt.x = pts[i].x;
             pt.y = pts[i].y;
             v.x = pt.x - p0.x;
-            v.y = pt.y = p0.y;
+            v.y = pt.y - p0.y;
             len_v = pow((pow(v.x, 2) + pow(v.y, 2)), 0.5);
             cos_theta = (v.x * unit_x.x + v.y * unit_x.y) / len_v;
             pts[i].angle = cos_theta;
@@ -100,44 +102,56 @@ std::stack<point> grahamScanCPU(point *pts)
     // {
     //     printf("pt angle CPU: (%f, %f) %f\n", pts[i].x, pts[i].y, pts[i].angle);
     // }
-
+    bool min_pt_found = false;
     for (i = 0; i < NUM_POINTS; ++i)
     {
-        bool min_pt_found = false;
-        if (i == min_pt_index)
-        {
+        if (i == min_pt_index)          
+        {   
             min_pt_found = true;
         }
-        else if (min_pt_found)
+        else if (min_pt_found)      // never true?
         {
             pts[i - 1].x = pts[i].x;
             pts[i - 1].y = pts[i].y;
+            pts[i - 1].angle = pts[i].angle;
         }
     }
+    pts[NUM_POINTS - 1].x = p0.x;
+    pts[NUM_POINTS - 1].y = p0.y;
+    pts[NUM_POINTS - 1].angle = 0.0;
 
     // sort points by cos angle (using built in to start, maybe should make our own CPU sort?)
     std::sort(pts, pts + NUM_POINTS - 1); // ignoring last point, is no longer relevant after shift
 
     std::stack<point> s;
     s.push(p0);
+    printf("Pushing p0: (%f, %f)\n", p0.x, p0.y);
     s.push(pts[0]);
+    printf("Pushing p1: (%f, %f)\n", pts[0].x, pts[0].y);
     s.push(pts[1]);
-    for (int j = 2; j < NUM_POINTS - 1; j++)
+    printf("Pushing p2: (%f, %f)\n", pts[1].x, pts[1].y);
+
+    for (int j = 2; j < NUM_POINTS - 1; ++j)
     {
         point pj = pts[j];
-        while (s.size() >= 2) {
+        point top = s.top();
+        s.pop();
+        point next_top = s.top();
+        s.pop();
+        s.push(next_top);
+        s.push(top);
+        float cross_z = crossZ(pj, top, next_top);
+        while (cross_z < 0)
+        {
+            s.pop();
             point top = s.top();
             s.pop();
-            point nextTop = s.top();
+            point next_top = s.top();
+            s.pop();
+            s.push(next_top);
             s.push(top);
-
-            if (crossZ(pj, top, nextTop) < 0) {
-                s.pop();
-            } else {
-                break;
-            }
+            cross_z = crossZ(pj, top, next_top);
         }
-
         s.push(pj);
     }
     return s;
@@ -226,39 +240,68 @@ std::stack<point> grahamScanGPU(point *pts)
     // calculate cos angle with p0 for each point
     calculateCosAnglesGPU(h_points, d_points, p0);
 
+    // point *h_pts = (point *)malloc(NUM_POINTS * sizeof(point));
+
+    // // sort h_points by angle using cpu sort
+    // for (int i = 0; i < NUM_POINTS; ++i)
+    // {
+    //     h_pts[i].x = h_points->x[i];
+    //     h_pts[i].y = h_points->y[i];
+    //     h_pts[i].angle = h_points->angle[i];
+
+    // }
+
+    // std::sort(h_pts, h_pts + NUM_POINTS - 1);
+
+    // pointArrayToPoints(h_pts, h_points);
+
     // sort points using cosine angle and min point
     sortPointsByAngleGPU(h_points, d_points, p0);
 
     std::stack<point> s;
 
     s.push(p0);
+    printf("Pushing p0: (%f, %f)\n", p0.x, p0.y);
     point p1;
     p1.x = h_points->x[0];
     p1.y = h_points->y[0];
+    p1.angle = h_points->angle[0];
     s.push(p1);
+    printf("Pushing p1: (%f, %f)\n", p1.x, p1.y);
     point p2;
     p2.x = h_points->x[1];
     p2.y = h_points->y[1];
+    p2.angle = h_points->angle[1];
     s.push(p2);
+    printf("Pushing p2: (%f, %f)\n", p2.x, p2.y);
 
-    for (int j = 2; j < NUM_POINTS-1; j++) {
+
+    for (int j = 2; j < NUM_POINTS - 1; ++j)
+    {
         point pj;
+
         pj.x = h_points->x[j];
         pj.y = h_points->y[j];
+        pj.angle = h_points->angle[j];
 
-        while (s.size() >= 2) {
+        point top = s.top();
+        s.pop();
+        point next_top = s.top();
+        s.pop();
+        s.push(next_top);
+        s.push(top);
+        float cross_z = crossZ(pj, top, next_top);
+        while (cross_z < 0)
+        {
+            s.pop();
             point top = s.top();
             s.pop();
-            point nextTop = s.top();
+            point next_top = s.top();
+            s.pop();
+            s.push(next_top);
             s.push(top);
-
-            if (crossZ(pj, top, nextTop) < 0) {
-                s.pop();
-            } else {
-                break;
-            }
+            cross_z = crossZ(pj, top, next_top);
         }
-
         s.push(pj);
     }
 
@@ -306,6 +349,7 @@ point minPointGPU(points *h_points, points *h_points_result, points *d_points, p
 
     cudaMemcpy(h_points_result, d_points_result, sizeof(points), cudaMemcpyDeviceToHost);
     checkCUDAError("Min point: CUDA memcpy back");
+
 
     // Reduce the block level results on CPU
     for (int i = 0; i < NUM_BLOCKS; ++i)
@@ -420,10 +464,10 @@ points sortPointsByAngleGPU(points *h_points, points *d_points, point p0)
     // output result
     printf("\tExecution time for sorting time was %f ms\n", time);
 
-    // for (int i = 0; i < NUM_POINTS; ++i)
-    // {
-    //     printf("pt angle GPU: (%f, %f) %f\n", h_points->x[i], h_points->y[i], h_points->angle[i]);
-    // }
+    for (int i = 0; i < NUM_POINTS; ++i)
+    {
+        printf("sorting GPU points: (%f, %f) %f\n", h_points->x[i], h_points->y[i], h_points->angle[i]);
+    }
 
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
@@ -456,7 +500,7 @@ void writeToFile(point *pts, int num_points, std::stack<point> s, const std::str
 
     for (int i = 0; i < num_points; ++i)
     {
-        outFile1 << std::fixed << std::setprecision(2) << pts[i].x << " " << pts[i].y << std::endl;
+        outFile1 << std::fixed << std::setprecision(2) << pts[i].x << " " << pts[i].y << " " << pts[i].angle << std::endl;
     }
 
     outFile1.close();
@@ -474,7 +518,7 @@ void writeToFile(point *pts, int num_points, std::stack<point> s, const std::str
         pt = s.top();
         s.pop();
         // printf("Writing stack point (%f, %f)\n", pt.x, pt.y);
-        outFile2 << std::fixed << std::setprecision(2) << pt.x << " " << pt.y << std::endl;
+        outFile2 << std::fixed << std::setprecision(2) << pt.x << " " << pt.y << " " << pt.angle << std::endl;
     }
 
     outFile2.close();
