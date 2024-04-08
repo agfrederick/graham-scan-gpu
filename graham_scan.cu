@@ -240,9 +240,8 @@ std::stack<point> grahamScanGPU(point *pts)
     // calculate cos angle with p0 for each point
     calculateCosAnglesGPU(h_points, d_points, p0);
 
-    // point *h_pts = (point *)malloc(NUM_POINTS * sizeof(point));
+    point *h_pts = (point *)malloc(NUM_POINTS * sizeof(point));
 
-    // // sort h_points by angle using cpu sort
     // for (int i = 0; i < NUM_POINTS; ++i)
     // {
     //     h_pts[i].x = h_points->x[i];
@@ -250,13 +249,16 @@ std::stack<point> grahamScanGPU(point *pts)
     //     h_pts[i].angle = h_points->angle[i];
 
     // }
-
     // std::sort(h_pts, h_pts + NUM_POINTS - 1);
 
     // pointArrayToPoints(h_pts, h_points);
 
     // sort points using cosine angle and min point
     sortPointsByAngleGPU(h_points, d_points, p0);
+    for (int i = 0; i < NUM_POINTS; ++i)
+    {
+        printf("sorted GPU points: (%f, %f) %f\n", h_points->x[i], h_points->y[i], h_points->angle[i]);
+    }
 
     std::stack<point> s;
 
@@ -291,7 +293,7 @@ std::stack<point> grahamScanGPU(point *pts)
         s.push(next_top);
         s.push(top);
         float cross_z = crossZ(pj, top, next_top);
-        while (cross_z < 0)
+        while (cross_z < 0.0)
         {
             s.pop();
             point top = s.top();
@@ -305,6 +307,14 @@ std::stack<point> grahamScanGPU(point *pts)
         s.push(pj);
     }
 
+    // sort h_points by angle using cpu sort
+    for (int i = 0; i < NUM_POINTS; ++i)
+    {
+        pts[i].x = h_points->x[i];
+        pts[i].y = h_points->y[i];
+        pts[i].angle = h_points->angle[i];
+
+    }
 
     return s;
 }
@@ -463,11 +473,6 @@ points sortPointsByAngleGPU(points *h_points, points *d_points, point p0)
 
     // output result
     printf("\tExecution time for sorting time was %f ms\n", time);
-
-    for (int i = 0; i < NUM_POINTS; ++i)
-    {
-        printf("sorting GPU points: (%f, %f) %f\n", h_points->x[i], h_points->y[i], h_points->angle[i]);
-    }
 
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
