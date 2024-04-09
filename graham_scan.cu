@@ -13,8 +13,8 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
-const int WIDTH = 800;
-const int HEIGHT = 600;
+// const int WIDTH = 800;
+// const int HEIGHT = 600;
 
 int SIZE = NUM_POINTS;    // Size of the point cloud
 float BOTTOMLEFTX = 0.0f; // Bottom left corner of the square
@@ -171,7 +171,7 @@ void generatePointCloud(point *pts, int size, float bottomLX, float bottomLY, fl
 
 void pointsArrayToPoint(points *pts, point *output)
 {
-    for (int i = 0; i < NUM_POINTS; ++i)
+    for (int i = 0; i < NUM_POINTS-1; ++i)
     {
         output[i].x = pts->x[i];
         output[i].y = pts->y[i];
@@ -204,7 +204,9 @@ void mergeSortFRThisTime(point *arr, int begin, int end)
     // Copy elements to leftArray
     for (int i = 0; i <= mid - begin; ++i)
     {
-        leftArray[i] = arr[begin + i];
+        leftArray[i].x = arr[begin + i].x;
+        leftArray[i].y = arr[begin + i].y;
+        leftArray[i].angle = arr[begin + i].angle;
         // printf("left arr[%d] = %d ", i, leftArray[i]);
     }
     // printf("\n");
@@ -212,7 +214,9 @@ void mergeSortFRThisTime(point *arr, int begin, int end)
     // Copy elements to rightArray
     for (int i = 0; i <= end - mid; ++i)
     {
-        rightArray[i] = arr[mid + 1 + i];
+        rightArray[i].x = arr[mid + 1 + i].x;
+        rightArray[i].y = arr[mid + 1 + i].y;
+        rightArray[i].angle = arr[mid + 1 + i].angle;
         // printf("right arr[%d] = %d ", i - mid, rightArray[i - mid]);
     }
     printf("\n");
@@ -229,7 +233,7 @@ void mergeSortFRThisTime(point *arr, int begin, int end)
     cudaMemcpy(rightArrayGPU, rightArray, (end - mid) * sizeof(point), cudaMemcpyHostToDevice);
     cudaMemcpy(testGPU, arr, size * sizeof(point), cudaMemcpyHostToDevice);
 
-    merge_basic_kernel<<<1, size>>>(leftArrayGPU, (mid - begin + 1), rightArrayGPU, (end - mid), testGPU);
+    merge_basic_kernel <<<1, size>>> (leftArrayGPU, (mid - begin + 1), rightArrayGPU, (end - mid), testGPU);
     cudaDeviceSynchronize();
 
     cudaMemcpy(arr + begin, testGPU, size * sizeof(point), cudaMemcpyDeviceToHost);
@@ -281,27 +285,30 @@ std::stack<point> grahamScanGPU(point *pts)
 
     pointsArrayToPoint(h_points, h_pts);
 
-    for (int i = 0; i < NUM_POINTS; ++i)
+    for (int i = 0; i < NUM_POINTS-1; ++i)
     {
         printf("(%f, %f), angle: %f\n", h_pts[i].x, h_pts[i].y, h_pts[i].angle);
     }
     // writeToFile(pointsArray2, NUM_POINTS, s_gpu, "gpu_points.txt", "gpu_stack.txt");
 
-    mergeSortFRThisTime(h_pts, 0, NUM_POINTS - 1);
+    mergeSortFRThisTime(h_pts, 0, NUM_POINTS - 2);
+
     printf("AFTER SORTING\n\n\n\n\n");
-    for (int i = 0; i < NUM_POINTS; ++i)
+    for (int i = 0; i < NUM_POINTS-1; ++i)
     {
         printf("(%f, %f), angle: %f\n", h_pts[i].x, h_pts[i].y, h_pts[i].angle);
     }
 
     s.push(p0);
     printf("Pushing p0: (%f, %f)\n", p0.x, p0.y);
+
     point p1;
     p1.x = h_pts[0].x;
     p1.y = h_pts[0].y;
     p1.angle = h_pts[0].angle;
     s.push(p1);
     printf("Pushing p1: (%f, %f)\n", p1.x, p1.y);
+
     point p2;
     p2.x = h_pts[1].x;
     p2.y = h_pts[1].y;
@@ -324,7 +331,7 @@ std::stack<point> grahamScanGPU(point *pts)
         s.push(next_top);
         s.push(top);
         float cross_z = crossZ(pj, top, next_top);
-        while (cross_z < 0.0)
+        while (cross_z < 0.0f)
         {
             s.pop();
             point top = s.top();
@@ -343,7 +350,7 @@ std::stack<point> grahamScanGPU(point *pts)
 
 point minPointGPU(points *h_points, points *h_points_result, points *d_points, points *d_points_result)
 {
-    unsigned int i;
+    // unsigned int i;
     point min_pt;
     float time;
     cudaEvent_t start, stop;
@@ -417,7 +424,7 @@ point minPointGPU(points *h_points, points *h_points_result, points *d_points, p
 
 void calculateCosAnglesGPU(points *h_points, points *d_points, point p0)
 {
-    unsigned int i;
+    // unsigned int i;
     float time;
     cudaEvent_t start, stop;
 
@@ -458,47 +465,6 @@ void calculateCosAnglesGPU(points *h_points, points *d_points, point p0)
     cudaEventDestroy(stop);
 }
 
-// create function for sorting points by angle
-// points sortPointsByAngleGPU(points *h_points, points *d_points, point p0)
-// {
-//     unsigned int i;
-//     float time;
-//     cudaEvent_t start, stop;
-
-//     cudaEventCreate(&start);
-//     cudaEventCreate(&stop);
-
-//     // memory copy records to device
-//     cudaMemcpy(d_points, h_points, sizeof(points), cudaMemcpyHostToDevice);
-//     checkCUDAError("sorting: CUDA memcpy forward");
-
-//     cudaEventRecord(start, 0);
-
-//     dim3 numBlocks(NUM_BLOCKS);
-//     dim3 threadsPerBlock(THREADS_PER_BLOCK);
-//     int numBits = sizeof(float) * 8;
-
-//     // merge_basic_kernel<<<numBlocks, threadsPerBlock>>>(d_points);
-//     checkCUDAError("sorting: CUDA kernel");
-
-//     cudaDeviceSynchronize();
-//     checkCUDAError("sorting: CUDA dev sync");
-
-//     cudaMemcpy(h_points, d_points, sizeof(points), cudaMemcpyDeviceToHost);
-//     checkCUDAError("sorting: CUDA memcpy back");
-
-//     cudaEventRecord(stop, 0);
-//     cudaEventSynchronize(stop);
-//     cudaEventElapsedTime(&time, start, stop);
-
-//     // output result
-//     printf("\tExecution time for sorting time was %f ms\n", time);
-
-//     cudaEventDestroy(start);
-//     cudaEventDestroy(stop);
-
-//     return *h_points;
-// }
 
 void checkCUDAError(const char *msg)
 {

@@ -90,7 +90,12 @@ __global__ void findCosAngles_kernel(points *d_points, point p0)
         v.x = pt.x - p0.x;
         v.y = pt.y - p0.y;
         len_v = sqrt((v.x * v.x + v.y * v.y));
-        cos_theta = (v.x * unit_x.x + v.y * unit_x.y) / len_v;
+
+        if (len_v > EPSILON) {
+            cos_theta = (v.x * unit_x.x + v.y * unit_x.y) / len_v;
+        } else {
+            cos_theta = 0.0f;
+        }
         d_points->angle[idx] = cos_theta;
     }
     else
@@ -114,18 +119,7 @@ __device__ int device_ceil(float x)
 
 __device__ void merge_sequential(point *A, int m, point *B, int n, point *C)
 {
-    // printf("Merge sequential reached\n");
-    // for (int i = 0; i < m; i++)
-    // {
-    //     printf("A[%d] = %d ", i, A[i]);
-    // }
-    // printf("\n");
 
-    // for (int i = 0; i < n; i++)
-    // {
-    //     printf("B[%d] = %d ", i, B[i]);
-    // }
-    // printf("\n");
     int i = 0; // Index into A
     int j = 0; // Index into B
     int k = 0; // Index into C
@@ -134,32 +128,40 @@ __device__ void merge_sequential(point *A, int m, point *B, int n, point *C)
     {
         if (A[i].angle <= B[j].angle)
         {
-            C[k++] = A[i++];
+
+            C[k].x = A[i].x;
+            C[k].y = A[i].y;
+            C[k++].angle = A[i++].angle;
+
         }
         else
         {
-            C[k++] = B[j++];
+
+            C[k].x = B[j].x;
+            C[k].y = B[j].y;
+            C[k++].angle = B[j++].angle;
+            
         }
     }
     if (i == m)
     {
         while (j < n)
         {
-            C[k++] = B[j++];
+            C[k].x = B[j].x;
+            C[k].y = B[j].y;
+            C[k++].angle = B[j++].angle;
         }
     }
     else
     {
         while (i < m)
         {
-            C[k++] = A[i++];
+            C[k].x = A[i].x;
+            C[k].y = A[i].y;
+            C[k++].angle = A[i++].angle;
         }
     }
-    // for (int i = 0; i < m + n; ++i)
-    // {
-    //     printf("C[%d] = %d ", i, C[i]);
-    // }
-    // printf("\n");
+
 }
 
 __device__ int co_rank(int k, point *A, int m, point *B, int n)
@@ -205,19 +207,7 @@ __device__ int co_rank(int k, point *A, int m, point *B, int n)
 __global__ void merge_basic_kernel(point *A, int m, point *B, int n, point *C)
 {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    // printf("Original data passed n\n\t");
 
-    // for (int i = 0; i < m; i++)
-    // {
-    //     printf("A[%d] = %d (%d) ", i, A[i], tid);
-    // }
-    // printf("\n");
-    // for (int i = 0; i < n; i++)
-    // {
-    //     printf("B[%d] = %d (%d)", i, B[i], tid);
-    // }
-    // printf("\n");
-    // printf("Basic kernel reached\n");
     int elementsPerThread = device_ceil((m + n) / blockDim.x * gridDim.x);
     int k_curr = tid * elementsPerThread;
     int k_next = min((tid + 1) * elementsPerThread, m + n);
@@ -225,6 +215,7 @@ __global__ void merge_basic_kernel(point *A, int m, point *B, int n, point *C)
     int i_next = co_rank(k_next, A, m, B, n);
     int j_curr = k_curr - i_curr;
     int j_next = k_next - i_next;
+    
     merge_sequential(&A[i_curr], i_next - i_curr, &B[j_curr], j_next - j_curr, &C[k_curr]);
 }
 
