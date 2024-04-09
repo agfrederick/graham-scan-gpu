@@ -18,7 +18,20 @@ def render(pts_file: str, hull_file: str, out_file: str) -> None:
             y_vals_hull.append(y_vals_hull[0])  # connect first and last points
 
     plt.scatter(x_vals_pts, y_vals_pts, color="darkorchid")
-    plt.plot(x_vals_hull, y_vals_hull, color="purple")
+
+    if out_filename == "outputs/cpu_plot.png":
+        plt.plot(x_vals_hull, y_vals_hull, color="purple")
+        plt.title("CPU Convex Hull")
+        plt.xlabel("X point")
+        plt.ylabel("Y point")
+    else:
+
+        plt.title("GPU Convex Hull")
+        plt.plot(x_vals_hull, y_vals_hull, color="purple")
+        plt.xlabel("X point")
+        plt.ylabel("Y point")
+        
+
     plt.savefig(out_file)
     plt.close()
 
