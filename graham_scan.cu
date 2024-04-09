@@ -105,11 +105,11 @@ std::stack<point> grahamScanCPU(point *pts)
     bool min_pt_found = false;
     for (i = 0; i < NUM_POINTS; ++i)
     {
-        if (i == min_pt_index)          
-        {   
+        if (i == min_pt_index)
+        {
             min_pt_found = true;
         }
-        else if (min_pt_found)      // never true?
+        else if (min_pt_found) // never true?
         {
             pts[i - 1].x = pts[i].x;
             pts[i - 1].y = pts[i].y;
@@ -169,56 +169,74 @@ void generatePointCloud(point *pts, int size, float bottomLX, float bottomLY, fl
     }
 }
 
-// TODO: function for rendering point cloud with convex hull
-// void renderConvexHull(point *pts, std::stack<point> s)
-// {
-//     glClear(GL_COLOR_BUFFER_BIT); // Clear the color buffer
+void pointsArrayToPoint(points *pts, point *output)
+{
+    for (int i = 0; i < NUM_POINTS; ++i)
+    {
+        output[i].x = pts->x[i];
+        output[i].y = pts->y[i];
+        output[i].angle = pts->angle[i];
+    }
+}
 
-//     // Set color
-//     glColor3f(1.0f, 0.0f, 0.0f);
+void mergeSortFRThisTime(point *arr, int begin, int end)
+{
+    // printf("MergeSortFRThisTime(begin:%d,end:%d)\n", begin, end);
+    // printf("[");
+    // for (int i = begin; i <= end; i++)
+    // {
+    //     printf("%d,", arr[i]);
+    // }
+    // printf("]\n");
+    if (begin >= end)
+        return;
 
-//     glBegin(GL_POINTS);
+    int mid = begin + (end - begin) / 2;
+    // printf("\tmid: %d\n", mid);
+    mergeSortFRThisTime(arr, begin, mid);
+    mergeSortFRThisTime(arr, mid + 1, end);
 
-//     // Iterate through the array of points and draw each point
-//     for (int i = 0; i < NUM_POINTS; ++i)
-//     {
-//         glVertex2f(pts[i].x, pts[i].y);
-//     }
+    int size = (end + 1 - begin);
 
-//     glEnd();
+    point leftArray[mid - begin + 1];
+    point rightArray[end - mid];
 
-//     glFlush(); // Flush OpenGL pipeline
+    // Copy elements to leftArray
+    for (int i = 0; i <= mid - begin; ++i)
+    {
+        leftArray[i] = arr[begin + i];
+        // printf("left arr[%d] = %d ", i, leftArray[i]);
+    }
+    // printf("\n");
 
-//     glColor3f(1.0, 0.0, 0.0); // Red color
+    // Copy elements to rightArray
+    for (int i = 0; i <= end - mid; ++i)
+    {
+        rightArray[i] = arr[mid + 1 + i];
+        // printf("right arr[%d] = %d ", i - mid, rightArray[i - mid]);
+    }
+    printf("\n");
 
-//     // Begin drawing lines
-//     glBegin(GL_LINES);
+    point *leftArrayGPU;
+    point *rightArrayGPU;
+    point *testGPU;
 
-//     point pt;
-//     while (!s.empty())
-//     {
-//         pt = s.top();
-//         s.pop();
-//         glVertex2f(pt.x, pt.y);
-//     }
+    cudaMalloc((void **)&leftArrayGPU, (mid - begin + 1) * sizeof(point));
+    cudaMalloc((void **)&rightArrayGPU, (end - mid) * sizeof(point));
+    cudaMalloc((void **)&testGPU, size * sizeof(point));
 
-//     glEnd();
+    cudaMemcpy(leftArrayGPU, leftArray, (mid - begin + 1) * sizeof(point), cudaMemcpyHostToDevice);
+    cudaMemcpy(rightArrayGPU, rightArray, (end - mid) * sizeof(point), cudaMemcpyHostToDevice);
+    cudaMemcpy(testGPU, arr, size * sizeof(point), cudaMemcpyHostToDevice);
 
-//     // Flush OpenGL buffer to display the line
-//     glFlush();
+    merge_basic_kernel<<<1, size>>>(leftArrayGPU, (mid - begin + 1), rightArrayGPU, (end - mid), testGPU);
+    cudaDeviceSynchronize();
 
-// Save to file
-// unsigned char *pixels = new unsigned char[3 * WIDTH * HEIGHT];
-// glReadPixels(0, 0, WIDTH, HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, pixels);
-
-// std::ofstream out("plot.ppm", std::ios::binary);
-// out << "P6\n"
-//     << WIDTH << " " << HEIGHT << "\n255\n";
-// out.write(reinterpret_cast<char *>(pixels), 3 * WIDTH * HEIGHT);
-// out.close();
-
-// delete[] pixels;
-// }
+    cudaMemcpy(arr + begin, testGPU, size * sizeof(point), cudaMemcpyDeviceToHost);
+    cudaFree(leftArrayGPU);
+    cudaFree(rightArrayGPU);
+    cudaFree(testGPU);
+}
 
 std::stack<point> grahamScanGPU(point *pts)
 {
@@ -254,37 +272,50 @@ std::stack<point> grahamScanGPU(point *pts)
     // pointArrayToPoints(h_pts, h_points);
 
     // sort points using cosine angle and min point
-    sortPointsByAngleGPU(h_points, d_points, p0);
+    // sortPointsByAngleGPU(h_points, d_points, p0);
+    // for (int i = 0; i < NUM_POINTS; ++i)
+    // {
+    //     printf("sorted GPU points: (%f, %f) %f\n", h_points->x[i], h_points->y[i], h_points->angle[i]);
+    // }
+    std::stack<point> s;
+
+    pointsArrayToPoint(h_points, h_pts);
+
     for (int i = 0; i < NUM_POINTS; ++i)
     {
-        printf("sorted GPU points: (%f, %f) %f\n", h_points->x[i], h_points->y[i], h_points->angle[i]);
+        printf("(%f, %f), angle: %f\n", h_pts[i].x, h_pts[i].y, h_pts[i].angle);
     }
+    // writeToFile(pointsArray2, NUM_POINTS, s_gpu, "gpu_points.txt", "gpu_stack.txt");
 
-    std::stack<point> s;
+    mergeSortFRThisTime(h_pts, 0, NUM_POINTS - 1);
+    printf("AFTER SORTING\n\n\n\n\n");
+    for (int i = 0; i < NUM_POINTS; ++i)
+    {
+        printf("(%f, %f), angle: %f\n", h_pts[i].x, h_pts[i].y, h_pts[i].angle);
+    }
 
     s.push(p0);
     printf("Pushing p0: (%f, %f)\n", p0.x, p0.y);
     point p1;
-    p1.x = h_points->x[0];
-    p1.y = h_points->y[0];
-    p1.angle = h_points->angle[0];
+    p1.x = h_pts[0].x;
+    p1.y = h_pts[0].y;
+    p1.angle = h_pts[0].angle;
     s.push(p1);
     printf("Pushing p1: (%f, %f)\n", p1.x, p1.y);
     point p2;
-    p2.x = h_points->x[1];
-    p2.y = h_points->y[1];
-    p2.angle = h_points->angle[1];
+    p2.x = h_pts[1].x;
+    p2.y = h_pts[1].y;
+    p2.angle = h_pts[1].angle;
     s.push(p2);
     printf("Pushing p2: (%f, %f)\n", p2.x, p2.y);
-
 
     for (int j = 2; j < NUM_POINTS - 1; ++j)
     {
         point pj;
 
-        pj.x = h_points->x[j];
-        pj.y = h_points->y[j];
-        pj.angle = h_points->angle[j];
+        pj.x = h_pts[j].x;
+        pj.y = h_pts[j].y;
+        pj.angle = h_pts[j].angle;
 
         point top = s.top();
         s.pop();
@@ -305,15 +336,6 @@ std::stack<point> grahamScanGPU(point *pts)
             cross_z = crossZ(pj, top, next_top);
         }
         s.push(pj);
-    }
-
-    // sort h_points by angle using cpu sort
-    for (int i = 0; i < NUM_POINTS; ++i)
-    {
-        pts[i].x = h_points->x[i];
-        pts[i].y = h_points->y[i];
-        pts[i].angle = h_points->angle[i];
-
     }
 
     return s;
@@ -359,7 +381,6 @@ point minPointGPU(points *h_points, points *h_points_result, points *d_points, p
 
     cudaMemcpy(h_points_result, d_points_result, sizeof(points), cudaMemcpyDeviceToHost);
     checkCUDAError("Min point: CUDA memcpy back");
-
 
     // Reduce the block level results on CPU
     for (int i = 0; i < NUM_BLOCKS; ++i)
@@ -437,50 +458,47 @@ void calculateCosAnglesGPU(points *h_points, points *d_points, point p0)
     cudaEventDestroy(stop);
 }
 
-
-
 // create function for sorting points by angle
-points sortPointsByAngleGPU(points *h_points, points *d_points, point p0)
-{
-    unsigned int i;
-    float time;
-    cudaEvent_t start, stop;
+// points sortPointsByAngleGPU(points *h_points, points *d_points, point p0)
+// {
+//     unsigned int i;
+//     float time;
+//     cudaEvent_t start, stop;
 
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
+//     cudaEventCreate(&start);
+//     cudaEventCreate(&stop);
 
-    // memory copy records to device
-    cudaMemcpy(d_points, h_points, sizeof(points), cudaMemcpyHostToDevice);
-    checkCUDAError("sorting: CUDA memcpy forward");
+//     // memory copy records to device
+//     cudaMemcpy(d_points, h_points, sizeof(points), cudaMemcpyHostToDevice);
+//     checkCUDAError("sorting: CUDA memcpy forward");
 
-    cudaEventRecord(start, 0);
+//     cudaEventRecord(start, 0);
 
-    dim3 numBlocks(NUM_BLOCKS);
-    dim3 threadsPerBlock(THREADS_PER_BLOCK);
+//     dim3 numBlocks(NUM_BLOCKS);
+//     dim3 threadsPerBlock(THREADS_PER_BLOCK);
+//     int numBits = sizeof(float) * 8;
 
-    merge_basic_kernel<<<numBlocks, threadsPerBlock>>>(d_points);
-    checkCUDAError("sorting: CUDA kernel");
+//     // merge_basic_kernel<<<numBlocks, threadsPerBlock>>>(d_points);
+//     checkCUDAError("sorting: CUDA kernel");
 
-    cudaDeviceSynchronize();
-    checkCUDAError("sorting: CUDA dev sync");
+//     cudaDeviceSynchronize();
+//     checkCUDAError("sorting: CUDA dev sync");
 
-    cudaMemcpy(h_points, d_points, sizeof(points), cudaMemcpyDeviceToHost);
-    checkCUDAError("sorting: CUDA memcpy back");
+//     cudaMemcpy(h_points, d_points, sizeof(points), cudaMemcpyDeviceToHost);
+//     checkCUDAError("sorting: CUDA memcpy back");
 
-    cudaEventRecord(stop, 0);
-    cudaEventSynchronize(stop);
-    cudaEventElapsedTime(&time, start, stop);
+//     cudaEventRecord(stop, 0);
+//     cudaEventSynchronize(stop);
+//     cudaEventElapsedTime(&time, start, stop);
 
-    // output result
-    printf("\tExecution time for sorting time was %f ms\n", time);
+//     // output result
+//     printf("\tExecution time for sorting time was %f ms\n", time);
 
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
+//     cudaEventDestroy(start);
+//     cudaEventDestroy(stop);
 
-    return *h_points;
-}
-
-
+//     return *h_points;
+// }
 
 void checkCUDAError(const char *msg)
 {
@@ -491,8 +509,6 @@ void checkCUDAError(const char *msg)
         exit(EXIT_FAILURE);
     }
 }
-
-
 
 void writeToFile(point *pts, int num_points, std::stack<point> s, const std::string &filename_pts, const std::string &filename_stack)
 {
@@ -531,25 +547,9 @@ void writeToFile(point *pts, int num_points, std::stack<point> s, const std::str
     std::cout << "Points and stack written to " << filename_pts << " " << filename_stack << std::endl;
 }
 
-
-
 int main(int argc, char **argv)
 {
-    // glutInit(&argc, argv);
-    // glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
-    // glutInitWindowSize(WIDTH, HEIGHT);
-    // glutCreateWindow("OpenGL Plot");
-    // glutDisplayFunc(renderConvexHull);
-    // glClearColor(0.0, 0.0, 0.0, 1.0);
 
-    // // // Set up the projection matrix
-    // // glMatrixMode(GL_PROJECTION);
-    // // glLoadIdentity();
-    // // gluOrtho2D(-1.0, 1.0, -1.0, 1.0);
-
-    // // Start the GLUT main loop
-    // glutMainLoop();
-    // TODO
     point pointsArray[NUM_POINTS];
     point pointsArray2[NUM_POINTS];
 
@@ -561,11 +561,8 @@ int main(int argc, char **argv)
         pointsArray2[i] = pointsArray[i];
     }
 
-    // point pt;
-
     std::stack<point> s_cpu = grahamScanCPU(pointsArray);
     writeToFile(pointsArray, NUM_POINTS, s_cpu, "cpu_points.txt", "cpu_stack.txt");
-
 
     std::stack<point> s_gpu = grahamScanGPU(pointsArray2);
     writeToFile(pointsArray2, NUM_POINTS, s_gpu, "gpu_points.txt", "gpu_stack.txt");
