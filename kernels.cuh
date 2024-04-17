@@ -2,7 +2,7 @@
 #define KERNEL_H
 
 #define NUM_POINTS 1024 // TODO: try different numbers of points
-#define THREADS_PER_BLOCK 1024
+#define THREADS_PER_BLOCK 32
 #define NUM_BLOCKS (NUM_POINTS / THREADS_PER_BLOCK)
 #define EPSILON 1e-6f // Example value, adjust as needed
 
