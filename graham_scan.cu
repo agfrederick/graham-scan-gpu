@@ -198,24 +198,28 @@ void mergeSortFRThisTime(point *arr, int begin, int end)
 
     int size = (end + 1 - begin);
 
+    point testG[size];
     point leftArray[mid - begin + 1];
     point rightArray[end - mid];
 
+    // printf("\n");
     // Copy elements to leftArray
     for (int i = 0; i <= mid - begin; ++i)
     {
+        // printf("arr[%d] = %lf \n", begin + i, arr[begin + i].x);
         leftArray[i] = arr[begin + i];
-        // printf("left arr[%d] = %d ", i, leftArray[i]);
+        // printf("\nleft arr[%d] = %lf, %lf - %lf ", i, leftArray[i].x,leftArray[i].y,leftArray[i].angle);
     }
     // printf("\n");
 
     // Copy elements to rightArray
     for (int i = 0; i <= end - mid; ++i)
     {
+        // printf("arr[%d] = %d \n", mid + 1 + i, arr[mid + 1 + i]);
         rightArray[i] = arr[mid + 1 + i];
-        // printf("right arr[%d] = %d ", i - mid, rightArray[i - mid]);
+        // printf("\nright arr[%d] = %lf, %lf - %lf ", i, rightArray[i].x, rightArray[i].y, rightArray[i].angle);
     }
-    printf("\n");
+    // printf("\n");
 
     point *leftArrayGPU;
     point *rightArrayGPU;
@@ -229,10 +233,16 @@ void mergeSortFRThisTime(point *arr, int begin, int end)
     cudaMemcpy(rightArrayGPU, rightArray, (end - mid) * sizeof(point), cudaMemcpyHostToDevice);
     cudaMemcpy(testGPU, arr, size * sizeof(point), cudaMemcpyHostToDevice);
 
-    merge_basic_kernel<<<1, size>>>(leftArrayGPU, (mid - begin + 1), rightArrayGPU, (end - mid), testGPU);
+    merge_basic_kernel<<<NUM_BLOCKS, size>>>(leftArrayGPU, (mid - begin + 1), rightArrayGPU, (end - mid), testGPU);
     cudaDeviceSynchronize();
 
-    cudaMemcpy(arr + begin, testGPU, size * sizeof(point), cudaMemcpyDeviceToHost);
+    cudaMemcpy(arr+begin, testGPU, size * sizeof(point), cudaMemcpyDeviceToHost);
+
+    // for (int i = 0; i < size; ++i)
+    // {
+    //     printf("\ntestGPU [%d] = %lf, %lf - %lf ", i, testG[i].x, testG[i].y, testG[i].angle);
+    // }
+
     cudaFree(leftArrayGPU);
     cudaFree(rightArrayGPU);
     cudaFree(testGPU);
