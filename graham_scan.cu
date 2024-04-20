@@ -121,11 +121,8 @@ std::stack<point> grahamScanCPU(point *pts)
 
     std::stack<point> s;
     s.push(p0);
-    printf("Pushing p0: (%f, %f)\n", p0.x, p0.y);
     s.push(pts[0]);
-    printf("Pushing p1: (%f, %f)\n", pts[0].x, pts[0].y);
     s.push(pts[1]);
-    printf("Pushing p2: (%f, %f)\n", pts[1].x, pts[1].y);
 
     for (int j = 2; j < NUM_POINTS - 1; ++j)
     {
@@ -254,19 +251,16 @@ std::stack<point> grahamScanGPU(point *pts)
     mergeSortFRThisTime(h_pts, 0, NUM_POINTS - 1);
 
     s.push(p0);
-    printf("Pushing p0: (%f, %f)\n", p0.x, p0.y);
     point p1;
     p1.x = h_pts[0].x;
     p1.y = h_pts[0].y;
     p1.angle = h_pts[0].angle;
     s.push(p1);
-    printf("Pushing p1: (%f, %f)\n", p1.x, p1.y);
     point p2;
     p2.x = h_pts[1].x;
     p2.y = h_pts[1].y;
     p2.angle = h_pts[1].angle;
     s.push(p2);
-    printf("Pushing p2: (%f, %f)\n", p2.x, p2.y);
 
     for (int j = 2; j < NUM_POINTS - 1; ++j)
     {
