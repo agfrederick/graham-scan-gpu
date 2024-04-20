@@ -103,9 +103,9 @@ __device__ int device_ceil(float x)
 
 __device__ void merge_sequential(point *A, int m, point *B, int n, point *C)
 {
-    int i = 0; // Index into A
-    int j = 0; // Index into B
-    int k = 0; // Index into C
+    int i = 0;
+    int j = 0;
+    int k = 0;
 
     while ((i < m) && (j < n))
     {
@@ -136,10 +136,9 @@ __device__ void merge_sequential(point *A, int m, point *B, int n, point *C)
 
 __device__ int co_rank(int k, point *A, int m, point *B, int n)
 {
-    // printf("co_rank reached\n");
     int i = k < m ? k : m; // i = min (k, m)
     int j = k - i;
-    int i_low = 0 > (k - n) ? 0 : k - n; // i_low = max (0, k-n) 0> (k-m) ? 0: k-m; // i_low = max (0, k-m)
+    int i_low = 0 > (k - n) ? 0 : k - n;
     int j_low = 0 > (k - m) ? 0 : k - m;
     int delta;
     bool active = true;
@@ -147,14 +146,14 @@ __device__ int co_rank(int k, point *A, int m, point *B, int n)
     {
         if (i > 0 && j < n && A[i - 1].angle > B[j].angle)
         {
-            delta = ((i - i_low + 1) >> 1); // device_ceil((i - i_low) / 2);
+            delta = ((i - i_low + 1) >> 1);
             j_low = j;
             j = j + delta;
             i = i - delta;
         }
         else if (j > 0 && i < m && B[j - 1].angle >= A[i].angle)
         {
-            delta = ((j - j_low + 1) >> 1); // device_ceil((j - j_low) / 2);
+            delta = ((j - j_low + 1) >> 1);
             i_low = i;
             i = i + delta;
             j = j - delta;

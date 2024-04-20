@@ -158,7 +158,6 @@ void generatePointCloud(point *pts, int size, float bottomLX, float bottomLY, fl
     {
         pts[i].x = bottomLX + static_cast<float>(rand()) / RAND_MAX * squareSize;
         pts[i].y = bottomLY + static_cast<float>(rand()) / RAND_MAX * squareSize;
-        // printf("Rand pt: (%f, %f)\n", pts[i].x, pts[i].y);
     }
 }
 
@@ -178,7 +177,6 @@ void mergeSortFRThisTime(point *arr, int begin, int end)
         return;
 
     int mid = begin + (end - begin) / 2;
-    // printf("\tmid: %d\n", mid);
     mergeSortFRThisTime(arr, begin, mid);
     mergeSortFRThisTime(arr, mid + 1, end);
 
