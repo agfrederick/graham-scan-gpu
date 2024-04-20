@@ -46,8 +46,6 @@ __global__ void lowestPoint_kernel(points *d_points, points *d_reduced_points)
         // Reduce
         for (int stride = blockDim.x / 2; stride > 0; stride >>= 1)
         {
-            // printf("Block %d: (%f, %f)\n", blockIdx.x, shared_points[threadIdx.x].x, shared_points[threadIdx.x].y);
-
             if (threadIdx.x < stride)
             {
                 if (shared_points[threadIdx.x].y > shared_points[threadIdx.x + stride].y ||
@@ -57,14 +55,12 @@ __global__ void lowestPoint_kernel(points *d_points, points *d_reduced_points)
                     shared_points[threadIdx.x] = shared_points[threadIdx.x + stride];
                 }
             }
-            // __syncthreads();
         }
         __syncthreads();
 
         // Store the minimum point of each block to output array
         if (threadIdx.x == 0)
         {
-            // printf("Block %d: (%f, %f)\n", blockIdx.x, shared_points[0].x, shared_points[0].y);
             d_reduced_points->x[blockIdx.x] = shared_points[0].x;
             d_reduced_points->y[blockIdx.x] = shared_points[0].y;
         }
@@ -99,13 +95,6 @@ __global__ void findCosAngles_kernel(points *d_points, point p0)
     }
 }
 
-// __device__ void movePointInPoints(points *pts, int dest, int src)
-// {
-//     pts->x[dest] = pts->x[src];
-//     pts->y[dest] = pts->y[src];
-//     pts->angle[dest] = pts->angle[src];
-// }
-
 __device__ int device_ceil(float x)
 {
     int ix = (int)x;
@@ -114,18 +103,6 @@ __device__ int device_ceil(float x)
 
 __device__ void merge_sequential(point *A, int m, point *B, int n, point *C)
 {
-    // printf("Merge sequential reached\n");
-    // for (int i = 0; i < m; i++)
-    // {
-    //     printf("\nA[%d] = %lf, %lf -%lf ", i, A[i].x, A[i].y, A[i].angle);
-    // }
-    // printf("\n");
-
-    // for (int i = 0; i < n; i++)
-    // {
-    //     printf("\nB[%d] = %lf, %lf -%lf", i, B[i].x, B[i].y, B[i].angle);
-    // }
-    // printf("\n");
     int i = 0; // Index into A
     int j = 0; // Index into B
     int k = 0; // Index into C
@@ -155,11 +132,6 @@ __device__ void merge_sequential(point *A, int m, point *B, int n, point *C)
             C[k++] = A[i++];
         }
     }
-    // for (int i = 0; i < m + n; ++i)
-    // {
-    //     printf("C[%d] = %lf, %lf - %lf ", i, C[i].x, C[i].y, C[i].angle);
-    // }
-    // printf("\n");
 }
 
 __device__ int co_rank(int k, point *A, int m, point *B, int n)
@@ -173,72 +145,31 @@ __device__ int co_rank(int k, point *A, int m, point *B, int n)
     bool active = true;
     while (active)
     {
-        // printf("active\n");
         if (i > 0 && j < n && A[i - 1].angle > B[j].angle)
         {
-            // printf("\n A[i-1].angle: %lf - B[i].angle: %lf", A[i - 1].angle, B[j].angle);
-            // printf("\nCORANK - A[%d] = %lf, %lf -%lf ", i-1, A[i].x, A[i].y, A[i].angle);
-            // printf("\nCORANK - B[%d] = %lf, %lf -%lf \n", j, B[j].x, B[j].y, B[j].angle);
-            
-            // printf("cond1\n");
             delta = ((i - i_low + 1) >> 1); // device_ceil((i - i_low) / 2);
-            // printf("delta1 %d\n", delta);
             j_low = j;
             j = j + delta;
             i = i - delta;
         }
         else if (j > 0 && i < m && B[j - 1].angle >= A[i].angle)
         {
-            // printf("\n B[i-1].angle: %lf - A[i].angle: %lf", B[i - 1].angle, A[j].angle);
-            // printf("\nCORANK - B[%d] = %lf, %lf -%lf ", j-1, B[j-1].x, B[j-1].y, B[j-1].angle);
-            
-            // printf("\nCORANK - A[%d] = %lf, %lf -%lf \n", i, A[i].x, A[i].y, A[i].angle);
-            
-            // printf("cond2\n");
             delta = ((j - j_low + 1) >> 1); // device_ceil((j - j_low) / 2);
-            // printf("delta2 %d\n", delta);
             i_low = i;
             i = i + delta;
             j = j - delta;
         }
         else
         {
-            // printf("setting inactive\n");
             active = false;
         }
     }
-    // printf("co_rank returning %d\n", i);
     return i;
 }
 
 __global__ void merge_basic_kernel(point *A, int m, point *B, int n, point *C)
 {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    // printf("Original data passed n\n\t");
-
-    // for (int i = 0; i < m; i++)
-    // {
-    //     printf("A[%d] = %d (%d) ", i, A[i], tid);
-    // }
-    // printf("\n");
-    // for (int i = 0; i < n; i++)
-    // {
-    //     printf("B[%d] = %d (%d)", i, B[i], tid);
-    // }
-    // printf("\n");
-    // printf("Basic kernel reached\n");
-    // for (int i = 0; i < m; i++)
-    // {
-    //     printf("\nBASIC - A[%d] = %lf, %lf -%lf ", i, A[i].x, A[i].y, A[i].angle);
-    // }
-    // printf("\n");
-
-    // for (int i = 0; i < n; i++)
-    // {
-    //     printf("\nBASIC - B[%d] = %lf, %lf -%lf", i, B[i].x, B[i].y, B[i].angle);
-    // }
-    // printf("\n");
-    
     int elementsPerThread = device_ceil((m + n) / blockDim.x * gridDim.x);
     int k_curr = tid * elementsPerThread;
     int k_next = min((tid + 1) * elementsPerThread, m + n);
@@ -250,4 +181,3 @@ __global__ void merge_basic_kernel(point *A, int m, point *B, int n, point *C)
 }
 
 #endif // KERNEL_H
-
