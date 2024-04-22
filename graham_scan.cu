@@ -13,9 +13,6 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
-const int WIDTH = 800;
-const int HEIGHT = 600;
-
 int SIZE = NUM_POINTS;    // Size of the point cloud
 float BOTTOMLEFTX = 0.0f; // Bottom left corner of the square
 float BOTTOMLEFTY = 0.0f;
@@ -171,18 +168,18 @@ void pointsArrayToPoint(points *pts, point *output)
     }
 }
 
-void mergeSortFRThisTime(point *arr, int begin, int end)
+void mergeSortGPU(point *arr, int begin, int end)
 {
     if (begin >= end)
         return;
 
     int mid = begin + (end - begin) / 2;
-    mergeSortFRThisTime(arr, begin, mid);
-    mergeSortFRThisTime(arr, mid + 1, end);
+    mergeSortGPU(arr, begin, mid);
+    mergeSortGPU(arr, mid + 1, end);
 
     int size = (end + 1 - begin);
 
-    point testG[size];
+    // point testG[size];
     point leftArray[mid - begin + 1];
     point rightArray[end - mid];
 
@@ -210,7 +207,9 @@ void mergeSortFRThisTime(point *arr, int begin, int end)
     cudaMemcpy(rightArrayGPU, rightArray, (end - mid) * sizeof(point), cudaMemcpyHostToDevice);
     cudaMemcpy(testGPU, arr, size * sizeof(point), cudaMemcpyHostToDevice);
 
-    merge_basic_kernel<<<NUM_BLOCKS, size>>>(leftArrayGPU, (mid - begin + 1), rightArrayGPU, (end - mid), testGPU);
+    merge_basic_kernel<<<NUM_BLOCKS, THREADS_PER_BLOCK>>>(leftArrayGPU, (mid - begin + 1), rightArrayGPU, (end - mid), testGPU);
+    checkCUDAError("Merge basic kernel: CUDA kernel");
+
     cudaDeviceSynchronize();
 
     cudaMemcpy(arr + begin, testGPU, size * sizeof(point), cudaMemcpyDeviceToHost);
@@ -222,6 +221,9 @@ void mergeSortFRThisTime(point *arr, int begin, int end)
 
 std::stack<point> grahamScanGPU(point *pts)
 {
+    float time;
+    cudaEvent_t start, stop;
+
     points *h_points;
     points *h_points_result;
     points *d_points;
@@ -246,7 +248,18 @@ std::stack<point> grahamScanGPU(point *pts)
 
     pointsArrayToPoint(h_points, h_pts);
 
-    mergeSortFRThisTime(h_pts, 0, NUM_POINTS - 1);
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start, 0);
+
+    mergeSortGPU(h_pts, 0, NUM_POINTS - 1);
+
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+    printf("\tExecution time for GPU merge sort was %f ms\n\n", time);
 
     s.push(p0);
     point p1;
@@ -294,7 +307,6 @@ std::stack<point> grahamScanGPU(point *pts)
 
 point minPointGPU(points *h_points, points *h_points_result, points *d_points, points *d_points_result)
 {
-    unsigned int i;
     point min_pt;
     float time;
     cudaEvent_t start, stop;
@@ -319,11 +331,10 @@ point minPointGPU(points *h_points, points *h_points_result, points *d_points, p
     cudaMemcpy(d_points, h_points, sizeof(points), cudaMemcpyHostToDevice);
     checkCUDAError("Min point: CUDA memcpy");
 
-    cudaEventRecord(start, 0);
-
     dim3 numBlocks(NUM_BLOCKS);
     dim3 threadsPerBlock(THREADS_PER_BLOCK);
 
+    cudaEventRecord(start, 0);
     lowestPoint_kernel<<<numBlocks, threadsPerBlock>>>(d_points, d_points_result);
     checkCUDAError("Min point: CUDA kernel");
 
@@ -332,6 +343,10 @@ point minPointGPU(points *h_points, points *h_points_result, points *d_points, p
 
     cudaMemcpy(h_points_result, d_points_result, sizeof(points), cudaMemcpyDeviceToHost);
     checkCUDAError("Min point: CUDA memcpy back");
+
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
 
     // Reduce the block level results on CPU
     for (int i = 0; i < NUM_BLOCKS; ++i)
@@ -353,13 +368,9 @@ point minPointGPU(points *h_points, points *h_points_result, points *d_points, p
         }
     }
 
-    cudaEventRecord(stop, 0);
-    cudaEventSynchronize(stop);
-    cudaEventElapsedTime(&time, start, stop);
-
     // output result
     printf("GPU lowest point was found at (%f, %f)\n", min_pt.x, min_pt.y);
-    printf("\tExecution time for lowest point was %f ms\n", time);
+    printf("\tExecution time for lowest point was %f ms\n\n", time);
 
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
@@ -368,7 +379,6 @@ point minPointGPU(points *h_points, points *h_points_result, points *d_points, p
 
 void calculateCosAnglesGPU(points *h_points, points *d_points, point p0)
 {
-    unsigned int i;
     float time;
     cudaEvent_t start, stop;
 
