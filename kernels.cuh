@@ -1,10 +1,11 @@
 #ifndef KERNEL_H
 #define KERNEL_H
 
-#define NUM_POINTS 1024 // TODO: try different numbers of points
-#define THREADS_PER_BLOCK 32
+#define NUM_POINTS 1024
+#define THREADS_PER_BLOCK 256
 #define NUM_BLOCKS (NUM_POINTS / THREADS_PER_BLOCK)
 #define EPSILON 1e-6f // Example value, adjust as needed
+// #define tile_size 64
 
 #include <stdio.h>
 #include <math.h>
@@ -178,5 +179,81 @@ __global__ void merge_basic_kernel(point *A, int m, point *B, int n, point *C)
     int j_next = k_next - i_next;
     merge_sequential(&A[i_curr], i_next - i_curr, &B[j_curr], j_next - j_curr, &C[k_curr]);
 }
+
+// __global__ void merge_tiled_kernel(int *A, int m, int *B, int n, int *C)
+// {
+//     extern __shared__ int shareAB[];
+
+//     int *A_s = &shareAB[0];
+//     int *B_s = &shareAB[tile_size];
+//     int C_curr = blockIdx.x * device_ceil((m + n) / gridDim.x);
+//     int C_next = min((blockIdx.x + 1) * device_ceil((m + n) / gridDim.x), (m + n));
+
+//     if (threadIdx.x == 0)
+//     {
+//         A_s[0] = co_rank(C_curr, A, m, B, n);
+//         A_s[1] = co_rank(C_curr, A, m, B, n);
+//     }
+
+//     __syncthreads();
+
+//     int A_curr = A_s[0];
+//     int A_next = A_s[1];
+//     int B_curr = C_curr - A_curr;
+//     int B_next = C_next - A_next;
+
+//     __syncthreads();
+
+//     int counter = 0;
+//     int C_length = C_next - C_curr;
+//     int A_length = A_next - A_curr;
+//     int B_length = B_next - B_curr;
+//     int total_iteration = device_ceil((C_length) / tile_size);
+//     int C_completed = 0;
+//     int A_consumed = 0;
+//     int B_consumed = 0;
+
+//     while (counter < total_iteration)
+//     {
+//         for (int i = 0; i < tile_size; i += blockDim.x)
+//         {
+//             if (i + threadIdx.x < A_length - A_consumed)
+//             {
+//                 A_s[i + threadIdx.x] = A[A_curr + A_consumed + i + threadIdx.x];
+//             }
+//         }
+
+//         for (int i = 0; i < tile_size; i += blockDim.x)
+//         {
+//             if (i + threadIdx.x < A_length - A_consumed)
+//             {
+//                 B_s[i + threadIdx.x] = B[B_curr + B_consumed + i + threadIdx.x];
+//             }
+//         }
+
+//         __syncthreads();
+
+//         int c_curr = threadIdx.x * (tile_size / blockDim.x);
+//         int c_next = (threadIdx.x + 1) * (tile_size / blockDim.x);
+
+//         c_curr = (c_curr <= C_length - C_completed) ? c_curr : C_length - C_completed;
+
+//         c_next = (c_next <= C_length - C_completed) ? c_next : C_length - C_completed;
+
+//         int a_curr = co_rank(c_curr, A_s, min(tile_size, A_length - A_consumed), B_s, min(tile_size, B_length - B_consumed));
+//         int b_curr = c_curr - a_curr;
+//         int a_next = co_rank(c_next, A_s, min(tile_size, A_length - A_consumed), B_s, min(tile_size, B_length - B_consumed));
+//         int b_next = c_next - a_next;
+
+//         merge_sequential(A_s + a_curr, a_next - a_curr, B_s + b_curr, b_next - b_curr, C + C_curr + C_completed + c_curr);
+
+//         counter++;
+//         C_completed += tile_size;
+//         A_consumed += co_rank(tile_size, A_s, tile_size, B_s, tile_size);
+//         B_consumed = C_completed - A_consumed;
+
+//         __syncthreads();
+//     }
+// }
 
 #endif // KERNEL_H
